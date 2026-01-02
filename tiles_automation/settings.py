@@ -136,7 +136,8 @@ LOGOUT_REDIRECT_URL = 'login'
 # Cloudflare Tunnel / reverse proxy support
 # Trust Cloudflare Quick Tunnel origins and treat proxied requests as HTTPS
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.trycloudflare.com'
+    'https://*.trycloudflare.com',
+    'https://*.onrender.com'
 ]
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
