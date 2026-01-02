@@ -1,0 +1,251 @@
+{% extends 'inventory/base.html' %}
+
+{% block extra_head %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success mb-3 card-summary">
+            <div class="card-header">Today's Sales</div>
+            <div class="card-body">
+                <h2 class="card-title">₹ {{ today_sales|stringformat:".2f" }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info mb-3 card-summary">
+            <div class="card-header">Cash Received</div>
+            <div class="card-body">
+                <h2 class="card-title">₹ {{ today_received|stringformat:".2f" }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-warning mb-3 card-summary">
+            <div class="card-header">Balance Due</div>
+            <div class="card-body">
+                <h2 class="card-title">₹ {{ today_due|stringformat:".2f" }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-secondary text-white">
+        <h5>New Sale Entry</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="customer_name" class="form-label">Customer Name</label>
+                    <input type="text" class="form-control" name="customer_name" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Mobile Numbers</label>
+                    <div id="mobile-container">
+                        <div class="input-group mb-2">
+                            <input type="tel" class="form-control" name="customer_mobile[]" placeholder="10-digit mobile number">
+                            <button type="button" class="btn btn-outline-secondary add-mobile">+ Add</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Sale Items</label>
+                <div id="items-container">
+                    <div class="row g-3 align-items-end sale-item" data-index="0">
+                        <div class="col-md-5">
+                            <select class="form-select product-select" name="product_ids[]" required>
+                                <option value="" selected disabled>Select Product</option>
+                                {% regroup products by get_category_display as product_list %}
+                                {% for category in product_list %}
+                                    <optgroup label="{{ category.grouper }}">
+                                        {% for product in category.list %}
+                                            <option 
+                                                value="{{ product.id }}" 
+                                                data-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+                                                data-location-ids="{% for loc in product.locations.all %}{{ loc.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                                                data-stock="{{ product.stock_quantity }}"
+                                            >
+                                                {{ product.name }} {% if product.size %}({{ product.size }}){% endif %} - Stock: {{ product.stock_quantity|floatformat:0 }}
+                                            </option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" step="0.01" class="form-control quantity-input" name="quantities[]" placeholder="Qty" required>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" step="0.01" class="form-control rate-input" name="rates[]" placeholder="Rate" required>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select location-select" name="locations[]">
+                                <option value="" selected>Location (optional)</option>
+                                <!-- Options will be populated based on selected product's locations -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" step="0.01" class="form-control line-total" placeholder="Line Total" readonly>
+                        </div>
+                        <div class="col-md-1 text-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm remove-item" title="Remove">&times;</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-outline-secondary" id="add-item">+ Add Item</button>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="total" class="form-label">Grand Total</label>
+                    <input type="number" step="0.01" class="form-control" id="total" readonly>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="paid_amount" class="form-label">Paid Amount</label>
+                    <input type="number" step="0.01" class="form-control" name="paid_amount" id="paid_amount" value="0" required>
+                </div>
+                <div class="col-md-4 mb-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100 btn-large">Save Sale</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- jQuery and Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    function formatProduct(state) {
+        if (!state.id) {
+            return state.text;
+        }
+        var imageUrl = $(state.element).data('image');
+        var $state = $('<span>' + state.text + '</span>');
+        if (imageUrl) {
+            $state = $(
+                '<span class="d-flex align-items-center">' +
+                '<img src="' + imageUrl + '" style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border-radius: 4px;" />' +
+                '<span>' + state.text + '</span>' +
+                '</span>'
+            );
+        }
+        return $state;
+    }
+
+    $(document).ready(function() {
+        // Build a location ID -> name map for fast lookup
+        const LOCATION_MAP = {
+            {% for loc in locations %}
+            {{ loc.id }}: "{{ loc.name|escapejs }}"{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        };
+        function initSelect2(context) {
+            const scope = context || $(document);
+            scope.find('.product-select').select2({
+                theme: 'bootstrap-5',
+                placeholder: "Select or search for a product",
+                width: '100%',
+                templateResult: formatProduct,
+                templateSelection: formatProduct
+            });
+        }
+
+        initSelect2();
+
+        function updateLocationOptions(row) {
+            const productSelect = $(row).find('.product-select');
+            const locationSelect = $(row).find('.location-select');
+            const opt = productSelect.find('option:selected');
+            const idsCsv = opt.data('location-ids') || '';
+            const ids = idsCsv ? idsCsv.toString().split(',').filter(Boolean) : [];
+            // Reset options
+            locationSelect.empty();
+            locationSelect.append('<option value="" selected>Location (optional)</option>');
+            if (ids.length) {
+                ids.forEach(function(id){
+                    const name = LOCATION_MAP[id];
+                    if (name) {
+                        locationSelect.append('<option value="'+id+'">'+name+'</option>');
+                    }
+                });
+            }
+        }
+
+        // Mobile numbers add/remove
+        $('#mobile-container').on('click', '.add-mobile', function() {
+            const row = $('<div class="input-group mb-2">\
+                <input type="tel" class="form-control" name="customer_mobile[]" placeholder="10-digit mobile number">\
+                <button type="button" class="btn btn-outline-danger remove-mobile">Remove</button>\
+            </div>');
+            $('#mobile-container').append(row);
+        });
+        $('#mobile-container').on('click', '.remove-mobile', function() {
+            $(this).closest('.input-group').remove();
+        });
+
+        function recalcTotals() {
+            let grand = 0;
+            $('#items-container .sale-item').each(function() {
+                const qty = parseFloat($(this).find('.quantity-input').val()) || 0;
+                const rate = parseFloat($(this).find('.rate-input').val()) || 0;
+                const line = qty * rate;
+                $(this).find('.line-total').val(line.toFixed(2));
+                grand += line;
+            });
+            $('#total').val(grand.toFixed(2));
+        }
+
+        $('#items-container').on('input', '.quantity-input, .rate-input', recalcTotals);
+        $('#items-container').on('change', '.product-select', function() {
+            const row = $(this).closest('.sale-item');
+            updateLocationOptions(row);
+        });
+
+        $('#add-item').on('click', function() {
+            const firstRow = $('#items-container .sale-item:first');
+            const newRow = firstRow.clone(false, false);
+            // Remove select2 artifacts before reinitializing
+            newRow.find('.product-select').removeClass('select2-hidden-accessible');
+            newRow.find('.product-select').next('.select2').remove();
+            newRow.find('.location-select').removeClass('select2-hidden-accessible');
+            newRow.find('.location-select').next('.select2').remove();
+
+            // Reset values
+            newRow.find('.product-select').val('');
+            newRow.find('.quantity-input').val('');
+            newRow.find('.rate-input').val('');
+            newRow.find('.line-total').val('');
+            // Reset location options to default; will populate on product change
+            const locSelect = newRow.find('.location-select');
+            locSelect.empty();
+            locSelect.append('<option value="" selected>Location (optional)</option>');
+
+            $('#items-container').append(newRow);
+            initSelect2(newRow);
+        });
+
+        $('#items-container').on('click', '.remove-item', function() {
+            const rows = $('#items-container .sale-item');
+            if (rows.length > 1) {
+                $(this).closest('.sale-item').remove();
+                recalcTotals();
+            }
+        });
+    });
+</script>
+{% endblock %}

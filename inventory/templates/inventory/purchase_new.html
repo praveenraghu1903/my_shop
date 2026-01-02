@@ -1,0 +1,131 @@
+{% extends 'inventory/base.html' %}
+
+{% block extra_head %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+{% endblock %}
+
+{% block content %}
+<div class="card shadow">
+    <div class="card-header bg-primary text-white">
+        <h5>New Purchase Entry (Stock In)</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="supplier_name" class="form-label">Supplier Name</label>
+                    <input type="text" class="form-control" name="supplier_name" list="supplier_list" required autocomplete="off">
+                    <datalist id="supplier_list">
+                        {% for supplier in suppliers %}
+                            <option value="{{ supplier.name }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="invoice_number" class="form-label">Supplier Invoice Number</label>
+                    <input type="text" class="form-control" name="invoice_number" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="product" class="form-label">Product</label>
+                    <select class="form-select" name="product" id="product" required>
+                        <option value="" selected disabled>Select Product</option>
+                        {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }} ({{ product.size }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="quantity" class="form-label">Quantity (sqft)</label>
+                    <input type="number" step="0.01" class="form-control" name="quantity" id="quantity" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="rate" class="form-label">Purchase Rate (per sqft)</label>
+                    <input type="number" step="0.01" class="form-control" name="rate" id="rate" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="total" class="form-label">Total Amount</label>
+                    <input type="number" step="0.01" class="form-control" id="total" readonly>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 mb-3 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary btn-lg">Record Purchase & Add to Stock</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow mt-4">
+    <div class="card-header bg-secondary text-white">
+        <h5>Recent Purchases</h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Supplier</th>
+                    <th>Invoice No</th>
+                    <th>Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for purchase in recent_purchases %}
+                <tr>
+                    <td>{{ purchase.date|date:"d M Y" }}</td>
+                    <td>{{ purchase.supplier.name }}</td>
+                    <td>{{ purchase.invoice_number }}</td>
+                    <td>₹{{ purchase.total_amount }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">No recent purchases found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- jQuery and Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('#product').select2({
+            theme: 'bootstrap-5',
+            placeholder: "Select or search for a product",
+            width: '100%'
+        });
+    });
+
+    const quantityInput = document.getElementById('quantity');
+    const rateInput = document.getElementById('rate');
+    const totalInput = document.getElementById('total');
+
+    function calculateTotal() {
+        const qty = parseFloat(quantityInput.value) || 0;
+        const rate = parseFloat(rateInput.value) || 0;
+        const total = qty * rate;
+        totalInput.value = total.toFixed(2);
+    }
+
+    quantityInput.addEventListener('input', calculateTotal);
+    rateInput.addEventListener('input', calculateTotal);
+</script>
+{% endblock %}
+

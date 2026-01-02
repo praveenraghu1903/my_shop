@@ -1,0 +1,165 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<h2 class="mb-4">Daily Sales Summary (Owner View)</h2>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white mb-3">
+            <div class="card-body">
+                <h5>Total Sales (Revenue)</h5>
+                <h3>₹ {{ total_sales|stringformat:".2f" }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-dark mb-3">
+            <div class="card-body">
+                <h5>Total Purchases (Expenses)</h5>
+                <h3>₹ {{ total_purchases|stringformat:".2f" }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card {% if net_profit >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white mb-3">
+            <div class="card-body">
+                <h5>Net Profit (Sales - Purchases)</h5>
+                <h3>₹ {{ net_profit|stringformat:".2f" }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-success text-white mb-3">
+            <div class="card-body">
+                <h5>Cash Received</h5>
+                <h3>₹ {{ total_paid|stringformat:".2f" }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-danger text-white mb-3">
+            <div class="card-body">
+                <h5>Outstanding Due</h5>
+                <h3>₹ {{ total_due|stringformat:".2f" }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white mb-3">
+            <div class="card-body">
+                <h5>Total Invoices</h5>
+                <h3>{{ total_invoices }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Silwani Column -->
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Silwani Store</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for invoice in silwani_invoices %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <strong>#{{ invoice.id }}</strong> - {{ invoice.customer_name }}
+                                    {% if invoice.customer_mobile %}
+                                    <br><small class="text-muted"><i class="fas fa-phone"></i> {{ invoice.customer_mobile }}</small>
+                                    {% endif %}
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">{{ invoice.date|date:"d M Y" }}</small>
+                                    <small class="text-muted">{{ invoice.date|date:"H:i" }}</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Items -->
+                            <ul class="list-unstyled bg-light p-2 rounded mb-2 small">
+                                {% for item in invoice.items.all %}
+                                    <li class="d-flex justify-content-between">
+                                        <span>
+                                            {{ item.product.name }} ({{ item.product.size }})
+                                            {% if item.location %}
+                                                <span class="text-muted">• {{ item.location.name }}</span>
+                                            {% endif %}
+                                        </span>
+                                        <span>{{ item.quantity }} x {{ item.rate|stringformat:".2f" }} = {{ item.item_total|stringformat:".2f" }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+
+                            <div class="d-flex justify-content-between border-top pt-2 small fw-bold">
+                                <span>Total: ₹{{ invoice.total_amount|stringformat:".2f" }}</span>
+                                <span class="text-success">Paid: ₹{{ invoice.paid_amount|stringformat:".2f" }}</span>
+                                <span class="text-danger">Due: ₹{{ invoice.balance_due|stringformat:".2f" }}</span>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="p-3 text-center text-muted">No sales recorded today.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gairatganj Column -->
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Gairatganj Store</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for invoice in gairatganj_invoices %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <strong>#{{ invoice.id }}</strong> - {{ invoice.customer_name }}
+                                    {% if invoice.customer_mobile %}
+                                    <br><small class="text-muted"><i class="fas fa-phone"></i> {{ invoice.customer_mobile }}</small>
+                                    {% endif %}
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted d-block">{{ invoice.date|date:"d M Y" }}</small>
+                                    <small class="text-muted">{{ invoice.date|date:"H:i" }}</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Items -->
+                            <ul class="list-unstyled bg-light p-2 rounded mb-2 small">
+                                {% for item in invoice.items.all %}
+                                    <li class="d-flex justify-content-between">
+                                        <span>
+                                            {{ item.product.name }} ({{ item.product.size }})
+                                            {% if item.location %}
+                                                <span class="text-muted">• {{ item.location.name }}</span>
+                                            {% endif %}
+                                        </span>
+                                        <span>{{ item.quantity }} x {{ item.rate|stringformat:".2f" }} = {{ item.item_total|stringformat:".2f" }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+
+                            <div class="d-flex justify-content-between border-top pt-2 small fw-bold">
+                                <span>Total: ₹{{ invoice.total_amount|stringformat:".2f" }}</span>
+                                <span class="text-success">Paid: ₹{{ invoice.paid_amount|stringformat:".2f" }}</span>
+                                <span class="text-danger">Due: ₹{{ invoice.balance_due|stringformat:".2f" }}</span>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="p-3 text-center text-muted">No sales recorded today.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
