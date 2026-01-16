@@ -26,6 +26,7 @@ class Product(models.Model):
         ('MARBLE', 'Marble'),
         ('GRANITE', 'Granite'),
         ('SANITARY', 'Sanitary'),
+        ('ADHESIVE', 'Adhesive'),
         ('OTHER', 'Other'),
     )
     name = models.CharField(max_length=200)

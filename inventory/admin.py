@@ -24,7 +24,7 @@ class StoreAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'size', 'unit', 'total_stock', 'purchase_count', 'last_purchase_date')
     list_filter = ('category', 'locations')
-    search_fields = ('name',)
+    search_fields = ('name', 'category', 'size')
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -52,6 +52,7 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
+    autocomplete_fields = ['product']
     list_display = ('product', 'store', 'quantity')
     list_filter = ('store',)
     
