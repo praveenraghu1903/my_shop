@@ -3,6 +3,33 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import Store, Product, Stock, Invoice, InvoiceItem, UserProfile, Supplier, Purchase, PurchaseItem, Location, InvoiceContact
 from django.db.models import Sum, Count, Max
+from django import forms
+from decimal import Decimal
+
+class ProductAdminForm(forms.ModelForm):
+    """Custom form for Product admin that includes initial quantity and location setup"""
+    initial_quantity = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        help_text="Initial stock quantity to add to Central Godown (optional)"
+    )
+    initial_location = forms.ModelChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        help_text="Initial location to assign to this product (optional)"
+    )
+
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # If editing existing product, don't show initial quantity/location
+        if self.instance and self.instance.pk:
+            self.fields['initial_quantity'].widget = forms.HiddenInput()
+            self.fields['initial_location'].widget = forms.HiddenInput()
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
@@ -22,9 +49,40 @@ class StoreAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    form = ProductAdminForm
     list_display = ('name', 'category', 'size', 'unit', 'total_stock', 'purchase_count', 'last_purchase_date')
     list_filter = ('category', 'locations')
     search_fields = ('name', 'category', 'size')
+
+    def save_model(self, request, obj, form, change):
+        # Save the product first
+        super().save_model(request, obj, form, change)
+
+        # If this is a new product and initial_quantity is provided, create stock
+        if not change:  # Only for new products
+            initial_quantity = form.cleaned_data.get('initial_quantity')
+            initial_location = form.cleaned_data.get('initial_location')
+
+            if initial_quantity and initial_quantity > 0:
+                # Get the central godown
+                try:
+                    godown = Store.objects.get(store_type='GODOWN')
+                    # Create or update stock for this product in godown
+                    stock, created = Stock.objects.get_or_create(
+                        product=obj,
+                        store=godown,
+                        defaults={'quantity': initial_quantity}
+                    )
+                    if not created:
+                        stock.quantity += initial_quantity
+                        stock.save()
+                except Store.DoesNotExist:
+                    # If no godown exists, we can't create stock
+                    pass
+
+            # If initial location is provided, add it to the product's locations
+            if initial_location:
+                obj.locations.add(initial_location)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
