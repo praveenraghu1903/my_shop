@@ -55,6 +55,7 @@ class StockAdmin(admin.ModelAdmin):
     autocomplete_fields = ['product']
     list_display = ('product', 'store', 'quantity')
     list_filter = ('store',)
+    search_fields = ('product__name', 'product__category', 'product__size', 'store__name')
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "store":
