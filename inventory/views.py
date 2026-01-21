@@ -48,6 +48,8 @@ def sales_new(request):
         mobiles = request.POST.getlist('customer_mobile[]')
         primary_mobile = mobiles[0] if mobiles else None
         paid_amount = Decimal(request.POST.get('paid_amount'))
+        discount_amount = Decimal(request.POST.get('discount_amount') or '0')
+        other_expenses = Decimal(request.POST.get('other_expenses') or '0')
 
         # Support multiple items via arrays; fallback to single item if arrays not provided
         product_ids = request.POST.getlist('product_ids[]')
@@ -102,7 +104,9 @@ def sales_new(request):
                     store=user_store,
                     customer_name=customer_name,
                     customer_mobile=primary_mobile,
-                    total_amount=total_amount,
+                    discount_amount=discount_amount,
+                    other_expenses=other_expenses,
+                    total_amount=(total_amount - discount_amount + other_expenses),
                     paid_amount=paid_amount
                 )
 
@@ -245,4 +249,4 @@ def purchase_new(request):
         'recent_purchases': recent_purchases,
     }
     return render(request, 'inventory/purchase_new.html', context)
-
+

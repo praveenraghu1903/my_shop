@@ -106,16 +106,55 @@
                 </div>
             </div>
 
+            <!-- Amount Calculation Section -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h6 class="text-primary mb-3">Amount Calculation</h6>
+                </div>
+            </div>
+
             <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="total" class="form-label">Grand Total</label>
-                    <input type="number" step="0.01" class="form-control" id="total" readonly>
+                <!-- Product Sum -->
+                <div class="col-md-6 mb-3">
+                    <label for="products_total" class="form-label fw-bold">Product Sum (₹)</label>
+                    <input type="number" step="0.01" class="form-control bg-light fs-5" id="products_total" readonly>
+                    <small class="text-muted">Total of all products (Qty × Rate)</small>
                 </div>
-                <div class="col-md-4 mb-3">
-                    <label for="paid_amount" class="form-label">Paid Amount</label>
-                    <input type="number" step="0.01" class="form-control" name="paid_amount" id="paid_amount" value="0" required>
+
+                <!-- Discount -->
+                <div class="col-md-6 mb-3">
+                    <label for="discount_amount" class="form-label fw-bold">Discount (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="discount_amount" id="discount_amount" value="0" placeholder="0.00">
+                    <small class="text-muted">Amount to deduct from product sum</small>
                 </div>
-                <div class="col-md-4 mb-3 d-flex align-items-end">
+            </div>
+
+            <div class="row">
+                <!-- Other Expenses -->
+                <div class="col-md-6 mb-3">
+                    <label for="other_expenses" class="form-label fw-bold">Other Expenses (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="other_expenses" id="other_expenses" value="0" placeholder="0.00">
+                    <small class="text-muted">Additional charges to add</small>
+                </div>
+
+                <!-- Final Amount -->
+                <div class="col-md-6 mb-3">
+                    <label for="total" class="form-label fw-bold text-success">Final Amount (₹)</label>
+                    <input type="number" step="0.01" class="form-control fw-bold text-success fs-5 bg-success bg-opacity-10" id="total" readonly>
+                    <small class="text-muted">Product Sum - Discount + Other Expenses</small>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Paid Amount -->
+                <div class="col-md-6 mb-3">
+                    <label for="paid_amount" class="form-label fw-bold">Paid Amount (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="paid_amount" id="paid_amount" value="0" required placeholder="0.00">
+                    <small class="text-muted">Amount received from customer</small>
+                </div>
+
+                <!-- Save Button -->
+                <div class="col-md-6 mb-3 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100 btn-large">Save Sale</button>
                 </div>
             </div>
@@ -199,18 +238,27 @@
         });
 
         function recalcTotals() {
-            let grand = 0;
+            let itemsTotal = 0;
             $('#items-container .sale-item').each(function() {
                 const qty = parseFloat($(this).find('.quantity-input').val()) || 0;
                 const rate = parseFloat($(this).find('.rate-input').val()) || 0;
                 const line = qty * rate;
                 $(this).find('.line-total').val(line.toFixed(2));
-                grand += line;
+                itemsTotal += line;
             });
-            $('#total').val(grand.toFixed(2));
+
+            $('#products_total').val(itemsTotal.toFixed(2));
+            const discount = parseFloat($('#discount_amount').val()) || 0;
+            const expenses = parseFloat($('#other_expenses').val()) || 0;
+            const finalTotal = itemsTotal - discount + expenses;
+            $('#total').val(finalTotal.toFixed(2));
         }
 
         $('#items-container').on('input', '.quantity-input, .rate-input', recalcTotals);
+        $('#discount_amount, #other_expenses').on('input', recalcTotals);
+
+        // Initial calculation when page loads
+        recalcTotals();
         $('#items-container').on('change', '.product-select', function() {
             const row = $(this).closest('.sale-item');
             updateLocationOptions(row);
