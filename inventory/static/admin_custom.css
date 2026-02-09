@@ -1,0 +1,28 @@
+/* Custom styling for AMBIKA admin */
+
+#header {
+    background: #ffffff;
+    border-bottom: 1px solid #eee;
+}
+
+#header .ambika-branding {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#header .ambika-logo {
+    height: 52px;
+}
+
+#header .ambika-text {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #c02222; /* deep red */
+}
+
+#header #user-tools a {
+    color: #333;
+}
+

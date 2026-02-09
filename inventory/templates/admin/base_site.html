@@ -1,0 +1,17 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}AMBIKA | {{ site_title|default:_("Django site admin") }}{% endblock %}
+
+{% block branding %}
+<div id="site-name" class="ambika-branding">
+    <img src="{% static 'ambika-logo.png' %}" alt="Ambika" class="ambika-logo">
+    <span class="ambika-text">AMBIKA</span>
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin_custom.css' %}">
+{% endblock %}
+

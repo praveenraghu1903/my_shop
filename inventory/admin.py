@@ -134,3 +134,8 @@ admin.site.register(Supplier)
 admin.site.register(Purchase)
 admin.site.register(PurchaseItem)
 admin.site.register(Location)
+
+# Custom admin titles
+admin.site.site_header = "AMBIKA"
+admin.site.site_title = "AMBIKA Admin"
+admin.site.index_title = "AMBIKA Dashboard"
