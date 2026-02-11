@@ -84,6 +84,18 @@ class Invoice(models.Model):
     def __str__(self):
         return f"Invoice #{self.id} - {self.customer_name}"
 
+
+class DueInvoice(Invoice):
+    """
+    Proxy model used to show only invoices with outstanding balance
+    in a separate 'Due invoices' section in the admin.
+    """
+
+    class Meta:
+        proxy = True
+        verbose_name = "Due invoice"
+        verbose_name_plural = "Due invoices"
+
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)

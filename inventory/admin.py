@@ -1,18 +1,23 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import Store, Product, Stock, Invoice, InvoiceItem, UserProfile, Supplier, Purchase, PurchaseItem, Location, InvoiceContact
-from django.db.models import Sum
+from .models import Store, Product, Stock, Invoice, InvoiceItem, UserProfile, Supplier, Purchase, PurchaseItem, Location, InvoiceContact, DueInvoice
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django import forms
 from decimal import Decimal
 
 class ProductAdminForm(forms.ModelForm):
-    """Custom form for Product admin that includes initial quantity and location setup"""
+    """Custom form for Product admin that includes initial quantity, store and location setup"""
     initial_quantity = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         required=False,
-        help_text="Initial stock quantity to add to Central Godown (optional)"
+        help_text="Initial stock quantity to add (optional)"
+    )
+    initial_store = forms.ModelChoiceField(
+        queryset=Store.objects.filter(store_type='GODOWN'),
+        required=False,
+        help_text="Godown/store where initial stock will be kept (optional)"
     )
     initial_location = forms.ModelChoiceField(
         queryset=Location.objects.all(),
@@ -26,9 +31,10 @@ class ProductAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # If editing existing product, don't show initial quantity/location
+        # If editing existing product, don't show initial quantity/store/location
         if self.instance and self.instance.pk:
             self.fields['initial_quantity'].widget = forms.HiddenInput()
+            self.fields['initial_store'].widget = forms.HiddenInput()
             self.fields['initial_location'].widget = forms.HiddenInput()
 
 class UserProfileInline(admin.StackedInline):
@@ -61,13 +67,14 @@ class ProductAdmin(admin.ModelAdmin):
         # If this is a new product and initial_quantity is provided, create stock
         if not change:  # Only for new products
             initial_quantity = form.cleaned_data.get('initial_quantity')
+            initial_store = form.cleaned_data.get('initial_store')
             initial_location = form.cleaned_data.get('initial_location')
 
             if initial_quantity and initial_quantity > 0:
-                # Get the central godown
-                try:
-                    godown = Store.objects.get(store_type='GODOWN')
-                    # Create or update stock for this product in godown
+                # Prefer the user-selected store; fall back to first GODOWN if not provided
+                godown = initial_store or Store.objects.filter(store_type='GODOWN').first()
+                if godown:
+                    # Create or update stock for this product in selected godown
                     stock, created = Stock.objects.get_or_create(
                         product=obj,
                         store=godown,
@@ -76,9 +83,6 @@ class ProductAdmin(admin.ModelAdmin):
                     if not created:
                         stock.quantity += initial_quantity
                         stock.save()
-                except Store.DoesNotExist:
-                    # If no godown exists, we can't create stock
-                    pass
 
             # If initial location is provided, add it to the product's locations
             if initial_location:
@@ -117,11 +121,43 @@ class InvoiceContactInline(admin.TabularInline):
     model = InvoiceContact
     extra = 0
 
+
+class DueAmountFilter(admin.SimpleListFilter):
+    title = "due amount"
+    parameter_name = "due_amount"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("gt0", "Due > 0"),
+            ("gte5000", "Due ≥ 5,000"),
+            ("gte10000", "Due ≥ 10,000"),
+        )
+
+    def queryset(self, request, queryset):
+        # relies on balance_due_annot added in get_queryset
+        value = self.value()
+        if value == "gt0":
+            return queryset.filter(balance_due_annot__gt=0)
+        if value == "gte5000":
+            return queryset.filter(balance_due_annot__gte=5000)
+        if value == "gte10000":
+            return queryset.filter(balance_due_annot__gte=10000)
+        return queryset
+
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount')
-    list_filter = ('store', 'date')
+    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display')
+    list_filter = ('store', 'date', DueAmountFilter)
     inlines = [InvoiceItemInline, InvoiceContactInline]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(
+            balance_due_annot=ExpressionWrapper(
+                F('total_amount') - F('paid_amount'),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
 
     def customer_phones(self, obj):
         others = ', '.join(c.mobile for c in obj.contacts.all())
@@ -129,6 +165,23 @@ class InvoiceAdmin(admin.ModelAdmin):
             return f"{obj.customer_mobile}, {others}"
         return obj.customer_mobile or others or ''
     customer_phones.short_description = 'Mobile Numbers'
+
+    def balance_due_display(self, obj):
+        return obj.balance_due_annot
+
+    balance_due_display.short_description = 'Balance Due'
+    balance_due_display.admin_order_field = 'balance_due_annot'
+
+
+@admin.register(DueInvoice)
+class DueInvoiceAdmin(InvoiceAdmin):
+    """
+    Separate admin section that shows only invoices where some money is still due.
+    """
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(balance_due_annot__gt=0)
 
 admin.site.register(Supplier)
 admin.site.register(Purchase)
