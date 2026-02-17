@@ -17,7 +17,11 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="#">AMBIKA</a>
             <span class="navbar-text text-white fw-bold d-none d-md-block" id="live-clock"></span>
-            <div class="d-flex">
+            <div class="d-flex align-items-center gap-2">
+                {% if user.is_authenticated and user.is_staff %}
+                    <a href="{% url 'product_import' %}" class="btn btn-outline-light btn-sm">Import Products</a>
+                    <a href="{% url 'daily_report_download' %}" class="btn btn-outline-light btn-sm">Download Today Report</a>
+                {% endif %}
                 {% if user.is_authenticated %}
                     <span class="navbar-text me-3 text-white">
                         Welcome, {{ user.username }} 

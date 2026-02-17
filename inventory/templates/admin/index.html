@@ -1,0 +1,15 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+<div class="module" style="margin-bottom:16px;">
+  <h2>Quick Actions</h2>
+  <ul class="object-tools" style="margin:8px 0;">
+    <li><a href="{% url 'product_import' %}" class="addlink">Import Products</a></li>
+    <li><a href="{% url 'daily_report_download' %}" class="historylink">Download Today Report</a></li>
+    <li><a href="{% url 'sales_summary' %}" class="viewlink">Sales Summary</a></li>
+  </ul>
+</div>
+
+{{ block.super }}
+{% endblock %}
+

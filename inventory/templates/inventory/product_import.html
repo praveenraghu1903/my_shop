@@ -1,0 +1,40 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="card shadow">
+    <div class="card-header bg-primary text-white">
+        <h5>Import Products (CSV or Excel)</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="file" class="form-label">Upload File</label>
+                <input class="form-control" type="file" id="file" name="file" accept=".csv,.xlsx" required>
+                <small class="text-muted">Supported columns: name, category, size, unit, initial_quantity, locations</small>
+                <small class="text-muted d-block">Locations can be comma-separated. Initial quantity will be added to Godown stock.</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Import</button>
+        </form>
+        <hr>
+        <div class="mb-4">
+            <h6>Or Import From Google Sheets (CSV Export URL)</h6>
+            <form method="post">
+                {% csrf_token %}
+                <div class="input-group">
+                    <input type="url" name="sheet_url" class="form-control" placeholder="Paste Google Sheet CSV export link or standard share link" required>
+                    <button class="btn btn-secondary" type="submit">Fetch & Import</button>
+                </div>
+                <small class="text-muted d-block mt-2">Use File → Share → Publish to web → CSV, or paste the sheet link; we convert it to CSV automatically.</small>
+            </form>
+        </div>
+        <div>
+            <h6>Sample CSV</h6>
+            <pre class="bg-light p-3 small">name,category,size,unit,initial_quantity,locations
+Classic White,TILES,2x2,sqft,500,Front Rack A1
+Marble Gold,MARBLE,7x4,sqft,0,Back Shelf B2,Display Corner
+            </pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
