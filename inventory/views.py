@@ -57,11 +57,12 @@ def sales_new(request):
             return redirect('sales_new')
 
         customer_name = request.POST.get('customer_name')
-        mobiles = request.POST.getlist('customer_mobile[]')
-        primary_mobile = mobiles[0] if mobiles else None
+        primary_mobile = request.POST.get('customer_mobile') or None
         paid_amount = Decimal(request.POST.get('paid_amount'))
         discount_amount = Decimal(request.POST.get('discount_amount') or '0')
-        other_expenses = Decimal(request.POST.get('other_expenses') or '0')
+        transport_cost = Decimal(request.POST.get('transport_cost') or '0')
+        labour_cost = Decimal(request.POST.get('labour_cost') or '0')
+        other_expenses = transport_cost + labour_cost
 
         # Support multiple items via arrays; fallback to single item if arrays not provided
         product_ids = request.POST.getlist('product_ids[]')
@@ -117,15 +118,12 @@ def sales_new(request):
                     customer_name=customer_name,
                     customer_mobile=primary_mobile,
                     discount_amount=discount_amount,
+                    transport_cost=transport_cost,
+                    labour_cost=labour_cost,
                     other_expenses=other_expenses,
-                    total_amount=(total_amount - discount_amount + other_expenses),
+                    total_amount=(total_amount + transport_cost + labour_cost - discount_amount),
                     paid_amount=paid_amount
                 )
-
-                # Save all mobile numbers as contacts for the invoice
-                for m in mobiles:
-                    if m:
-                        InvoiceContact.objects.create(invoice=invoice, mobile=m)
 
                 # Deduct stock and create invoice items
                 for product, qty, rate, stock, loc in items:

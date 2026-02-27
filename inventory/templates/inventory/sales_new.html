@@ -47,13 +47,8 @@
                     <input type="text" class="form-control" name="customer_name" required>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Mobile Numbers</label>
-                    <div id="mobile-container">
-                        <div class="input-group mb-2">
-                            <input type="tel" class="form-control" name="customer_mobile[]" placeholder="10-digit mobile number">
-                            <button type="button" class="btn btn-outline-secondary add-mobile">+ Add</button>
-                        </div>
-                    </div>
+                    <label class="form-label" for="customer_mobile">Mobile Number</label>
+                    <input type="tel" class="form-control" id="customer_mobile" name="customer_mobile" placeholder="10-digit mobile number">
                 </div>
             </div>
 
@@ -121,27 +116,36 @@
                     <small class="text-muted">Total of all products (Qty × Rate)</small>
                 </div>
 
-                <!-- Discount -->
+                <!-- Transport Cost -->
                 <div class="col-md-6 mb-3">
-                    <label for="discount_amount" class="form-label fw-bold">Discount (₹)</label>
-                    <input type="number" step="0.01" class="form-control" name="discount_amount" id="discount_amount" value="0" placeholder="0.00">
-                    <small class="text-muted">Amount to deduct from product sum</small>
+                    <label for="transport_cost" class="form-label fw-bold">Transport Cost (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="transport_cost" id="transport_cost" value="0" placeholder="0.00">
+                    <small class="text-muted">Transport charges to add</small>
                 </div>
             </div>
 
             <div class="row">
-                <!-- Other Expenses -->
+                <!-- Labour Cost -->
                 <div class="col-md-6 mb-3">
-                    <label for="other_expenses" class="form-label fw-bold">Other Expenses (₹)</label>
-                    <input type="number" step="0.01" class="form-control" name="other_expenses" id="other_expenses" value="0" placeholder="0.00">
-                    <small class="text-muted">Additional charges to add</small>
+                    <label for="labour_cost" class="form-label fw-bold">Labour Cost (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="labour_cost" id="labour_cost" value="0" placeholder="0.00">
+                    <small class="text-muted">Labour charges to add</small>
                 </div>
 
                 <!-- Final Amount -->
                 <div class="col-md-6 mb-3">
                     <label for="total" class="form-label fw-bold text-success">Final Amount (₹)</label>
                     <input type="number" step="0.01" class="form-control fw-bold text-success fs-5 bg-success bg-opacity-10" id="total" readonly>
-                    <small class="text-muted">Product Sum - Discount + Other Expenses</small>
+                    <small class="text-muted">Product Sum + Transport + Labour - Discount</small>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Discount (last) -->
+                <div class="col-12 mb-3">
+                    <label for="discount_amount" class="form-label fw-bold">Discount (₹)</label>
+                    <input type="number" step="0.01" class="form-control" name="discount_amount" id="discount_amount" value="0" placeholder="0.00">
+                    <small class="text-muted">Amount to deduct from total</small>
                 </div>
             </div>
 
@@ -225,18 +229,6 @@
             }
         }
 
-        // Mobile numbers add/remove
-        $('#mobile-container').on('click', '.add-mobile', function() {
-            const row = $('<div class="input-group mb-2">\
-                <input type="tel" class="form-control" name="customer_mobile[]" placeholder="10-digit mobile number">\
-                <button type="button" class="btn btn-outline-danger remove-mobile">Remove</button>\
-            </div>');
-            $('#mobile-container').append(row);
-        });
-        $('#mobile-container').on('click', '.remove-mobile', function() {
-            $(this).closest('.input-group').remove();
-        });
-
         function recalcTotals() {
             let itemsTotal = 0;
             $('#items-container .sale-item').each(function() {
@@ -249,13 +241,14 @@
 
             $('#products_total').val(itemsTotal.toFixed(2));
             const discount = parseFloat($('#discount_amount').val()) || 0;
-            const expenses = parseFloat($('#other_expenses').val()) || 0;
-            const finalTotal = itemsTotal - discount + expenses;
+            const transport = parseFloat($('#transport_cost').val()) || 0;
+            const labour = parseFloat($('#labour_cost').val()) || 0;
+            const finalTotal = itemsTotal + transport + labour - discount;
             $('#total').val(finalTotal.toFixed(2));
         }
 
         $('#items-container').on('input', '.quantity-input, .rate-input', recalcTotals);
-        $('#discount_amount, #other_expenses').on('input', recalcTotals);
+        $('#transport_cost, #labour_cost, #discount_amount').on('input', recalcTotals);
 
         // Initial calculation when page loads
         recalcTotals();

@@ -5,6 +5,7 @@ from .models import Store, Product, Stock, Invoice, InvoiceItem, UserProfile, Su
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django import forms
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 class ProductAdminForm(forms.ModelForm):
     """Custom form for Product admin that includes initial quantity, store and location setup"""
@@ -122,6 +123,33 @@ class InvoiceContactInline(admin.TabularInline):
     extra = 0
 
 
+class InvoiceAdminForm(forms.ModelForm):
+    due_amount_paid = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        min_value=Decimal('0'),
+        initial=Decimal('0'),
+        label="Due amount paid",
+        help_text="Enter the amount received now. This will be added to Paid Amount and reduce the due.",
+    )
+
+    class Meta:
+        model = Invoice
+        fields = '__all__'
+
+    def clean(self):
+        cleaned = super().clean()
+        due_amount_paid = cleaned.get('due_amount_paid') or Decimal('0')
+        paid_amount = cleaned.get('paid_amount') or Decimal('0')
+        total_amount = cleaned.get('total_amount') or Decimal('0')
+
+        new_paid = paid_amount + due_amount_paid
+        if new_paid > total_amount:
+            raise ValidationError("Paid amount cannot exceed total amount.")
+        return cleaned
+
+
 class DueAmountFilter(admin.SimpleListFilter):
     title = "due amount"
     parameter_name = "due_amount"
@@ -146,9 +174,35 @@ class DueAmountFilter(admin.SimpleListFilter):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
+    form = InvoiceAdminForm
     list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display')
     list_filter = ('store', 'date', DueAmountFilter)
+    search_fields = ('customer_name', 'customer_mobile', 'contacts__mobile')
     inlines = [InvoiceItemInline, InvoiceContactInline]
+    readonly_fields = ('date',)
+
+    fieldsets = (
+        (None, {
+            'fields': ('store', 'customer_name', 'customer_mobile', 'date')
+        }),
+        ('Amounts', {
+            'fields': (
+                'total_amount',
+                'discount_amount',
+                'transport_cost',
+                'labour_cost',
+                'other_expenses',
+                'paid_amount',
+                'due_amount_paid',
+            )
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        due_amount_paid = form.cleaned_data.get('due_amount_paid') or Decimal('0')
+        if due_amount_paid and due_amount_paid > 0:
+            obj.paid_amount = (obj.paid_amount or Decimal('0')) + due_amount_paid
+        super().save_model(request, obj, form, change)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
