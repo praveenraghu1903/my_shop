@@ -204,6 +204,43 @@ class InvoiceAdmin(admin.ModelAdmin):
             obj.paid_amount = (obj.paid_amount or Decimal('0')) + due_amount_paid
         super().save_model(request, obj, form, change)
 
+    def save_formset(self, request, form, formset, change):
+        """
+        Override to recalculate invoice total_amount when invoice items are added/modified/deleted.
+        This fixes the issue where adding products to existing invoices doesn't update the total.
+        """
+        # Save the formset first (this saves all the invoice items)
+        instances = formset.save(commit=False)
+        
+        # Handle deleted items
+        for obj in formset.deleted_objects:
+            obj.delete()
+        
+        # Save new/modified items
+        for instance in instances:
+            instance.save()
+        
+        formset.save_m2m()
+        
+        # Now recalculate the invoice total based on all current items
+        invoice = form.instance
+        
+        # Check if this is the InvoiceItem formset (not InvoiceContact)
+        if formset.model == InvoiceItem:
+            # Calculate sum of all invoice items (quantity × rate)
+            items_total = Decimal('0')
+            for item in invoice.items.all():
+                items_total += item.quantity * item.rate
+            
+            # Recalculate total_amount: items_total + transport + labour - discount
+            invoice.total_amount = (
+                items_total + 
+                (invoice.transport_cost or Decimal('0')) + 
+                (invoice.labour_cost or Decimal('0')) - 
+                (invoice.discount_amount or Decimal('0'))
+            )
+            invoice.save(update_fields=['total_amount'])
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.annotate(
@@ -225,7 +262,6 @@ class InvoiceAdmin(admin.ModelAdmin):
 
     balance_due_display.short_description = 'Balance Due'
     balance_due_display.admin_order_field = 'balance_due_annot'
-
 
 @admin.register(DueInvoice)
 class DueInvoiceAdmin(InvoiceAdmin):
