@@ -19,6 +19,7 @@
             <span class="navbar-text text-white fw-bold d-none d-md-block" id="live-clock"></span>
             <div class="d-flex align-items-center gap-2">
                 {% if user.is_authenticated and user.is_staff %}
+                    <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-light btn-sm">Inventory</a>
                     <a href="{% url 'product_import' %}" class="btn btn-outline-light btn-sm">Import Products</a>
                     <a href="{% url 'daily_report_download' %}" class="btn btn-outline-light btn-sm">Download Today Report</a>
                 {% endif %}
