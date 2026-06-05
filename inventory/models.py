@@ -120,18 +120,6 @@ class Location(models.Model):
     def __str__(self):
         return self.name
 
-class ProductBuyPrice(models.Model):
-    """
-    Admin-only model. Stores the buy/cost price of a product so the admin
-    can track gross margin and cash flow in the balance sheet.
-    """
-    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='buy_price_record')
-    buy_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Cost price per unit paid to supplier")
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.product.name} - Buy ₹{self.buy_price}"
-
 class InvoiceContact(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='contacts', on_delete=models.CASCADE)
     mobile = models.CharField(max_length=15)
