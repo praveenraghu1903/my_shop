@@ -57,9 +57,13 @@ class StoreAdmin(admin.ModelAdmin):
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     form = ProductAdminForm
-    list_display = ('name', 'category', 'size', 'unit', 'total_stock')
+    list_display = ('name', 'category', 'size', 'unit', 'total_stock', 'get_locations')
     list_filter = ('category', 'locations')
     search_fields = ('name', 'category', 'size')
+
+    def get_locations(self, obj):
+        return ', '.join(loc.name for loc in obj.locations.all()) or '-'
+    get_locations.short_description = 'Locations'
 
     def save_model(self, request, obj, form, change):
         # Save the product first
