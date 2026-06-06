@@ -7,6 +7,87 @@
 {% endblock %}
 
 {% block content %}
+
+{% if last_invoice %}
+<!-- WhatsApp Share Banner -->
+<div class="alert alert-success alert-dismissible fade show shadow mb-4" role="alert" id="whatsapp-banner">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <strong>✅ Invoice #{{ last_invoice.id }} saved!</strong>
+      &nbsp; Customer: {{ last_invoice.customer_name }}
+      &nbsp; Total: ₹{{ last_invoice.total_amount|stringformat:".2f" }}
+      &nbsp; Due: ₹{{ last_invoice.balance_due|stringformat:".2f" }}
+    </div>
+    <div class="d-flex gap-2">
+      {% if last_invoice.customer_mobile %}
+      <a id="whatsapp-btn"
+         href="#"
+         target="_blank"
+         class="btn btn-success btn-sm"
+         style="background:#25D366; border-color:#25D366;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+          <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+        </svg>
+        Share on WhatsApp
+      </a>
+      {% else %}
+      <button class="btn btn-success btn-sm" onclick="showManualWhatsApp()" style="background:#25D366; border-color:#25D366;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+          <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+        </svg>
+        Share on WhatsApp
+      </button>
+      {% endif %}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  </div>
+
+  <!-- Manual number input (shown when no mobile saved) -->
+  <div id="manual-whatsapp" class="mt-2" style="display:none;">
+    <div class="input-group" style="max-width:320px;">
+      <span class="input-group-text">+91</span>
+      <input type="tel" id="manual-mobile" class="form-control" placeholder="Enter mobile number" maxlength="10">
+      <button class="btn btn-success" onclick="openWhatsAppManual()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Build the WhatsApp message
+const invoiceMsg = `🧾 *AMBIKA — Invoice #{{ last_invoice.id }}*
+
+📅 Date: {{ last_invoice.date|date:"d M Y" }}
+👤 Customer: {{ last_invoice.customer_name }}
+
+*Items:*
+{% for item in last_invoice.items.all %}- {{ item.product.name }} ({{ item.product.size }}) × {{ item.quantity|floatformat:0 }} {{ item.product.unit }} @ ₹{{ item.rate|floatformat:2 }} = ₹{{ item.item_total|floatformat:2 }}
+{% endfor %}
+💰 Total: ₹{{ last_invoice.total_amount|floatformat:2 }}
+✅ Paid: ₹{{ last_invoice.paid_amount|floatformat:2 }}
+{% if last_invoice.balance_due > 0 %}⚠️ Due: ₹{{ last_invoice.balance_due|floatformat:2 }}{% else %}✔️ Fully Paid{% endif %}
+
+Thank you for your business! 🙏
+— AMBIKA, {{ last_invoice.store.name }}`;
+
+const encodedMsg = encodeURIComponent(invoiceMsg);
+
+{% if last_invoice.customer_mobile %}
+// Set direct link with customer number
+const mobile = "91{{ last_invoice.customer_mobile }}".replace(/\D/g,'');
+document.getElementById('whatsapp-btn').href = `https://wa.me/${mobile}?text=${encodedMsg}`;
+{% endif %}
+
+function showManualWhatsApp() {
+  document.getElementById('manual-whatsapp').style.display = 'block';
+}
+
+function openWhatsAppManual() {
+  const num = document.getElementById('manual-mobile').value.trim().replace(/\D/g,'');
+  if (num.length < 10) { alert('Please enter a valid 10-digit number'); return; }
+  window.open(`https://wa.me/91${num}?text=${encodedMsg}`, '_blank');
+}
+</script>
+{% endif %}
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card text-white bg-success mb-3 card-summary">

@@ -138,7 +138,7 @@ def sales_new(request):
                     )
 
                 messages.success(request, f"Sale recorded successfully! Invoice #{invoice.id}")
-                return redirect('sales_new')
+                return redirect(f'/sales/new/?whatsapp_invoice={invoice.id}')
 
         except Exception as e:
             messages.error(request, str(e))
@@ -148,6 +148,15 @@ def sales_new(request):
     today_received = Invoice.objects.filter(date__date=today, store=user_store).aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
     today_due = today_sales - today_received
 
+    # Pass last invoice for WhatsApp sharing
+    last_invoice = None
+    whatsapp_invoice_id = request.GET.get('whatsapp_invoice')
+    if whatsapp_invoice_id:
+        try:
+            last_invoice = Invoice.objects.prefetch_related('items__product').get(id=whatsapp_invoice_id)
+        except Invoice.DoesNotExist:
+            pass
+
     context = {
         'products': products,
         'locations': locations,
@@ -155,6 +164,7 @@ def sales_new(request):
         'today_sales': today_sales,
         'today_received': today_received,
         'today_due': today_due,
+        'last_invoice': last_invoice,
     }
     return render(request, 'inventory/sales_new.html', context)
 
