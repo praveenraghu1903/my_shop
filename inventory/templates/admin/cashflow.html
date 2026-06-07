@@ -1,0 +1,397 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Cash Flow {{ year }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --green:#27ae60; --blue:#2980b9; --orange:#e67e22;
+  --red:#c0392b; --purple:#8e44ad; --teal:#16a085; --dark:#2c3e50;
+}
+body { background:#f4f6f9; }
+.cf-grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+.cf-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.cf-grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+@media(max-width:900px){ .cf-grid3,.cf-grid4{ grid-template-columns:1fr 1fr; } .cf-grid2{ grid-template-columns:1fr; } }
+@media(max-width:560px){ .cf-grid3,.cf-grid4,.cf-grid2{ grid-template-columns:1fr; } }
+
+.kpi { border-radius:12px; padding:20px 22px; color:#fff; position:relative; overflow:hidden; }
+.kpi::before { content:''; position:absolute; right:-20px; top:-20px; width:90px; height:90px; background:rgba(255,255,255,.1); border-radius:50%; }
+.kpi .label { font-size:.78rem; opacity:.85; letter-spacing:.5px; text-transform:uppercase; margin:0; }
+.kpi .value { font-size:1.75rem; font-weight:700; margin:4px 0 0; line-height:1.1; }
+.kpi .sub   { font-size:.75rem; opacity:.7; margin:4px 0 0; }
+.bg-green  { background:linear-gradient(135deg,#27ae60,#1e8449); }
+.bg-blue   { background:linear-gradient(135deg,#2980b9,#1a5276); }
+.bg-orange { background:linear-gradient(135deg,#e67e22,#a04000); }
+.bg-red    { background:linear-gradient(135deg,#c0392b,#7b241c); }
+.bg-purple { background:linear-gradient(135deg,#8e44ad,#5b2c6f); }
+.bg-teal   { background:linear-gradient(135deg,#16a085,#0e6655); }
+.bg-dark   { background:linear-gradient(135deg,#2c3e50,#1a252f); }
+.bg-indigo { background:linear-gradient(135deg,#3d5a99,#2c4070); }
+
+.section { background:#fff; border-radius:12px; padding:22px; margin-bottom:20px; box-shadow:0 1px 8px rgba(0,0,0,.07); }
+.section-title { font-size:1rem; font-weight:700; color:var(--dark); margin:0 0 16px; display:flex; align-items:center; gap:8px; border-left:4px solid var(--blue); padding-left:10px; }
+
+.cf-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+.cf-table th { background:var(--dark); color:#fff; padding:9px 12px; text-align:left; font-weight:600; white-space:nowrap; }
+.cf-table td { padding:8px 12px; border-bottom:1px solid #f0f0f0; }
+.cf-table tr:hover td { background:#f8f9fa; }
+.cf-table .pos { color:var(--green); font-weight:600; }
+.cf-table .neg { color:var(--red); font-weight:600; }
+.cf-table .total-row td { font-weight:700; background:#f8f9fa; border-top:2px solid #ddd; }
+
+.progress-bar-wrap { background:#e9ecef; border-radius:20px; height:8px; margin-top:4px; }
+.progress-bar-fill { height:8px; border-radius:20px; }
+
+.year-btn { padding:5px 14px; border-radius:20px; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:.85rem; text-decoration:none; color:#333; }
+.year-btn:hover, .year-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+
+.badge-green { background:#d4edda; color:#155724; border-radius:20px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+.badge-red   { background:#f8d7da; color:#721c24; border-radius:20px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+.badge-blue  { background:#d1ecf1; color:#0c5460; border-radius:20px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+
+canvas { max-height:300px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+  <div>
+    <h1 style="margin:0; font-size:1.6rem;">💹 Cash Flow & Business Analytics</h1>
+    <p style="margin:4px 0 0; color:#888; font-size:.85rem;">All figures based on invoices and purchase records · Updated live</p>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    {% for y in available_years %}
+      <a href="?year={{ y }}" class="year-btn {% if y == year %}active{% endif %}">{{ y }}</a>
+    {% endfor %}
+    <a href="/admin/" class="year-btn">← Admin</a>
+  </div>
+</div>
+
+{# ─── ANNUAL KPI ROW ─── #}
+<div class="cf-grid4">
+  <div class="kpi bg-green">
+    <p class="label">Total Revenue</p>
+    <h3 class="value">₹{{ year_revenue|floatformat:0 }}</h3>
+    <p class="sub">{{ year_invoices }} invoices in {{ year }}</p>
+  </div>
+  <div class="kpi bg-blue">
+    <p class="label">Cash Collected</p>
+    <h3 class="value">₹{{ year_collected|floatformat:0 }}</h3>
+    <p class="sub">{{ collection_rate }}% collection rate</p>
+  </div>
+  <div class="kpi bg-orange">
+    <p class="label">Outstanding Due</p>
+    <h3 class="value">₹{{ year_due|floatformat:0 }}</h3>
+    <p class="sub">All time due: ₹{{ total_outstanding|floatformat:0 }}</p>
+  </div>
+  <div class="kpi {% if year_net >= 0 %}bg-teal{% else %}bg-red{% endif %}">
+    <p class="label">Net Profit</p>
+    <h3 class="value">₹{{ year_net|floatformat:0 }}</h3>
+    <p class="sub">After all recorded expenses</p>
+  </div>
+</div>
+
+<div class="cf-grid4">
+  <div class="kpi bg-red">
+    <p class="label">Purchase Expenses</p>
+    <h3 class="value">₹{{ year_purchases|floatformat:0 }}</h3>
+    <p class="sub">{{ purchase_pct }}% of total expenses</p>
+  </div>
+  <div class="kpi bg-purple">
+    <p class="label">Transport Cost</p>
+    <h3 class="value">₹{{ year_transport|floatformat:0 }}</h3>
+    <p class="sub">{{ transport_pct }}% of total expenses</p>
+  </div>
+  <div class="kpi bg-indigo">
+    <p class="label">Labour Cost</p>
+    <h3 class="value">₹{{ year_labour|floatformat:0 }}</h3>
+    <p class="sub">{{ labour_pct }}% of total expenses</p>
+  </div>
+  <div class="kpi bg-dark">
+    <p class="label">Avg Invoice Value</p>
+    <h3 class="value">₹{{ avg_invoice|floatformat:0 }}</h3>
+    <p class="sub">Discounts given: ₹{{ year_discounts|floatformat:0 }}</p>
+  </div>
+</div>
+
+{# ─── BEST / WORST MONTH ─── #}
+{% if best_month or worst_month %}
+<div class="cf-grid2">
+  {% if best_month %}
+  <div class="section" style="border-left:4px solid var(--green);">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <p style="margin:0; color:#888; font-size:.8rem; text-transform:uppercase;">🏆 Best Month</p>
+        <h3 style="margin:4px 0; color:var(--green); font-size:1.5rem;">{{ best_month.month }}</h3>
+        <p style="margin:0; font-size:.9rem;">Net profit: <strong>₹{{ best_month.net|floatformat:0 }}</strong></p>
+        <p style="margin:0; font-size:.85rem; color:#888;">Revenue: ₹{{ best_month.revenue|floatformat:0 }} · {{ best_month.invoices }} invoices</p>
+      </div>
+      <span style="font-size:3rem;">📈</span>
+    </div>
+  </div>
+  {% endif %}
+  {% if worst_month %}
+  <div class="section" style="border-left:4px solid var(--orange);">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <p style="margin:0; color:#888; font-size:.8rem; text-transform:uppercase;">⚠️ Weakest Month</p>
+        <h3 style="margin:4px 0; color:var(--orange); font-size:1.5rem;">{{ worst_month.month }}</h3>
+        <p style="margin:0; font-size:.9rem;">Net: <strong>₹{{ worst_month.net|floatformat:0 }}</strong></p>
+        <p style="margin:0; font-size:.85rem; color:#888;">Revenue: ₹{{ worst_month.revenue|floatformat:0 }} · {{ worst_month.invoices }} invoices</p>
+      </div>
+      <span style="font-size:3rem;">📉</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ─── REVENUE vs EXPENSES LINE CHART ─── #}
+<div class="section">
+  <p class="section-title">📊 Monthly Revenue vs Expenses vs Net Profit</p>
+  <canvas id="trendChart"></canvas>
+</div>
+
+{# ─── BAR + PIE ─── #}
+<div class="cf-grid2">
+  <div class="section">
+    <p class="section-title">💰 Monthly Collections vs Due</p>
+    <canvas id="collectionChart"></canvas>
+  </div>
+  <div class="section">
+    <p class="section-title">🍩 Expense Breakdown</p>
+    <canvas id="expenseDonut"></canvas>
+  </div>
+</div>
+
+{# ─── MONTHLY TABLE ─── #}
+<div class="section">
+  <p class="section-title">📅 Month-by-Month Summary</p>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Invoices</th>
+          <th>Revenue</th>
+          <th>Collected</th>
+          <th>Due</th>
+          <th>Purchases</th>
+          <th>Transport</th>
+          <th>Labour</th>
+          <th>Discounts</th>
+          <th>Total Expenses</th>
+          <th>Net Profit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in months_data %}
+        <tr>
+          <td><strong>{{ m.month }}</strong></td>
+          <td>{{ m.invoices }}</td>
+          <td>{% if m.revenue > 0 %}₹{{ m.revenue|floatformat:0 }}{% else %}<span style="color:#ccc;">—</span>{% endif %}</td>
+          <td class="pos">{% if m.collected > 0 %}₹{{ m.collected|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td class="{% if m.due > 0 %}neg{% endif %}">{% if m.due > 0 %}₹{{ m.due|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td>{% if m.purchases > 0 %}₹{{ m.purchases|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td>{% if m.transport > 0 %}₹{{ m.transport|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td>{% if m.labour > 0 %}₹{{ m.labour|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td>{% if m.discounts > 0 %}₹{{ m.discounts|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td class="neg">{% if m.expenses > 0 %}₹{{ m.expenses|floatformat:0 }}{% else %}—{% endif %}</td>
+          <td class="{% if m.net >= 0 %}pos{% elif m.net < 0 %}neg{% endif %}">
+            {% if m.revenue > 0 %}₹{{ m.net|floatformat:0 }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td><strong>TOTAL</strong></td>
+          <td><strong>{{ year_invoices }}</strong></td>
+          <td><strong>₹{{ year_revenue|floatformat:0 }}</strong></td>
+          <td class="pos"><strong>₹{{ year_collected|floatformat:0 }}</strong></td>
+          <td class="neg"><strong>₹{{ year_due|floatformat:0 }}</strong></td>
+          <td><strong>₹{{ year_purchases|floatformat:0 }}</strong></td>
+          <td><strong>₹{{ year_transport|floatformat:0 }}</strong></td>
+          <td><strong>₹{{ year_labour|floatformat:0 }}</strong></td>
+          <td><strong>₹{{ year_discounts|floatformat:0 }}</strong></td>
+          <td class="neg"><strong>₹{{ year_expenses|floatformat:0 }}</strong></td>
+          <td class="{% if year_net >= 0 %}pos{% else %}neg{% endif %}"><strong>₹{{ year_net|floatformat:0 }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{# ─── STORE WISE ─── #}
+{% if store_data %}
+<div class="section">
+  <p class="section-title">🏪 Store-wise Performance ({{ year }})</p>
+  <div class="cf-grid2">
+    {% for s in store_data %}
+    <div style="border:1px solid #e9ecef; border-radius:10px; padding:16px;">
+      <h5 style="margin:0 0 12px; color:var(--dark);">{{ s.name }}</h5>
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+        <span style="color:#888; font-size:.85rem;">Revenue</span>
+        <strong>₹{{ s.revenue|floatformat:0 }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+        <span style="color:#888; font-size:.85rem;">Collected</span>
+        <span class="pos">₹{{ s.collected|floatformat:0 }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <span style="color:#888; font-size:.85rem;">Due</span>
+        <span class="{% if s.due > 0 %}neg{% endif %}">₹{{ s.due|floatformat:0 }}</span>
+      </div>
+      {% if s.revenue > 0 %}
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill bg-green" style="width:{% widthratio s.collected s.revenue 100 %}%; background:var(--green);"></div>
+      </div>
+      <small style="color:#888;">{{ s.invoices }} invoices</small>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ─── TOP PRODUCTS ─── #}
+<div class="cf-grid2">
+  <div class="section">
+    <p class="section-title">🏅 Top 10 Products by Revenue ({{ year }})</p>
+    <table class="cf-table">
+      <thead><tr><th>#</th><th>Product</th><th>Qty Sold</th><th>Revenue</th></tr></thead>
+      <tbody>
+        {% for p in top_products %}
+        <tr>
+          <td style="color:#aaa; font-size:.8rem;">{{ forloop.counter }}</td>
+          <td>
+            <strong>{{ p.product__name }}</strong>
+            <small style="color:#888; display:block;">{{ p.product__size }} · {{ p.product__category }}</small>
+          </td>
+          <td>{{ p.total_qty|floatformat:0 }}</td>
+          <td class="pos">₹{{ p.total_rev|floatformat:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="text-align:center; color:#aaa;">No data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <p class="section-title">👤 Top 10 Customers by Billing ({{ year }})</p>
+    <table class="cf-table">
+      <thead><tr><th>#</th><th>Customer</th><th>Bills</th><th>Billed</th><th>Due</th></tr></thead>
+      <tbody>
+        {% for c in top_customers %}
+        <tr>
+          <td style="color:#aaa; font-size:.8rem;">{{ forloop.counter }}</td>
+          <td>
+            <strong>{{ c.customer_name }}</strong>
+            {% if c.customer_mobile %}<small style="color:#888; display:block;">{{ c.customer_mobile }}</small>{% endif %}
+          </td>
+          <td>{{ c.invoice_count }}</td>
+          <td class="pos">₹{{ c.total_billed|floatformat:0 }}</td>
+          <td>
+            {% with due=c.total_billed|add:c.total_paid %}
+              {% if c.total_paid < c.total_billed %}
+                <span class="badge-red">₹{% widthratio c.total_billed 1 1 %}</span>
+              {% else %}
+                <span class="badge-green">Paid</span>
+              {% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="text-align:center; color:#aaa;">No data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ─── OUTSTANDING DUES ─── #}
+<div class="section">
+  <p class="section-title">🔴 All Outstanding Dues — Total: ₹{{ total_outstanding|floatformat:0 }}</p>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr><th>#</th><th>Customer</th><th>Mobile</th><th>Store</th><th>Date</th><th>Total</th><th>Paid</th><th>Due</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        {% for inv in due_invoices %}
+        <tr>
+          <td>{{ inv.id }}</td>
+          <td><strong>{{ inv.customer_name }}</strong></td>
+          <td>{{ inv.customer_mobile|default:"—" }}</td>
+          <td>{{ inv.store.name }}</td>
+          <td>{{ inv.date|date:"d M Y" }}</td>
+          <td>₹{{ inv.total_amount|floatformat:0 }}</td>
+          <td class="pos">₹{{ inv.paid_amount|floatformat:0 }}</td>
+          <td class="neg"><strong>₹{{ inv.bal|floatformat:0 }}</strong></td>
+          <td>
+            <a href="/admin/inventory/invoice/{{ inv.id }}/change/" style="font-size:.78rem; color:var(--blue);">Edit →</a>
+            {% if inv.customer_mobile %}
+            <a href="https://wa.me/91{{ inv.customer_mobile }}?text={{ 'Due reminder: Invoice '|urlencode }}%23{{ inv.id }}%20-%20Due%20amount%20%E2%82%B9{{ inv.bal|floatformat:0 }}%20pending.%20Please%20clear%20at%20earliest.%20-%20AMBIKA" target="_blank" style="font-size:.78rem; color:#25D366; margin-left:8px;">WhatsApp</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" style="text-align:center; color:#aaa; padding:20px;">No outstanding dues 🎉</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ─── NOTE ─── #}
+<div style="background:#fff8e1; border-left:4px solid #f39c12; border-radius:8px; padding:14px 18px; margin-bottom:20px;">
+  <strong>📌 Note on Net Profit:</strong> Net profit = Revenue − (Purchase expenses + Transport + Labour).
+  Since product buy prices are not yet recorded per-sale, COGS is estimated from purchase records.
+  For more accurate margins, add purchase records when buying stock.
+</div>
+
+<script>
+const months = {{ months_json|safe }};
+const labels = months.map(m => m.month);
+
+// Trend chart
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label:'Revenue ₹',  data:months.map(m=>m.revenue),  borderColor:'#27ae60', backgroundColor:'rgba(39,174,96,.08)', tension:.4, fill:true, pointRadius:4 },
+      { label:'Expenses ₹', data:months.map(m=>m.expenses), borderColor:'#c0392b', backgroundColor:'rgba(192,57,43,.06)', tension:.4, fill:true, pointRadius:4 },
+      { label:'Net Profit ₹',data:months.map(m=>m.net),    borderColor:'#2980b9', backgroundColor:'rgba(41,128,185,.06)', tension:.4, fill:false, pointRadius:4, borderDash:[5,3] },
+    ]
+  },
+  options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true, ticks:{callback:v=>'₹'+v.toLocaleString('en-IN')}}} }
+});
+
+// Collection chart
+new Chart(document.getElementById('collectionChart'), {
+  type:'bar',
+  data:{
+    labels,
+    datasets:[
+      { label:'Collected ₹', data:months.map(m=>m.collected), backgroundColor:'rgba(39,174,96,.8)', borderRadius:4 },
+      { label:'Due ₹',       data:months.map(m=>m.due),       backgroundColor:'rgba(192,57,43,.7)', borderRadius:4 },
+    ]
+  },
+  options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{stacked:false}, y:{beginAtZero:true, ticks:{callback:v=>'₹'+v.toLocaleString('en-IN')}}} }
+});
+
+// Expense donut
+new Chart(document.getElementById('expenseDonut'), {
+  type:'doughnut',
+  data:{
+    labels:['Purchases','Transport','Labour'],
+    datasets:[{ data:[{{ year_purchases }}, {{ year_transport }}, {{ year_labour }}], backgroundColor:['#c0392b','#e67e22','#8e44ad'], borderWidth:2 }]
+  },
+  options:{ responsive:true, plugins:{legend:{position:'right'}, tooltip:{callbacks:{label:ctx=>' ₹'+ctx.raw.toLocaleString('en-IN')}}} }
+});
+</script>
+{% endblock %}

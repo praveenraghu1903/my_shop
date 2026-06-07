@@ -1,15 +1,58 @@
-{% extends "admin/index.html" %}
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+{% block coltype %}colMS{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
 
 {% block content %}
-<div class="module" style="margin-bottom:16px;">
-  <h2>Quick Actions</h2>
-  <ul class="object-tools" style="margin:8px 0;">
-    <li><a href="{% url 'product_import' %}" class="addlink">Import Products</a></li>
-    <li><a href="{% url 'daily_report_download' %}" class="historylink">Download Today Report</a></li>
-    <li><a href="{% url 'sales_summary' %}" class="viewlink">Sales Summary</a></li>
-  </ul>
+<div id="content-main" class="app-list">
+  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
 </div>
 
-{{ block.super }}
+{% if request.user.is_superuser %}
+<div style="margin-top:24px; padding:20px; background:linear-gradient(135deg,#1a252f,#2c3e50); border-radius:12px; color:#fff; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h3 style="margin:0 0 4px; font-size:1rem; opacity:.8; letter-spacing:.5px;">📊 FINANCIAL ANALYTICS</h3>
+    <p style="margin:0; opacity:.6; font-size:.82rem;">Revenue, expenses, net profit, store performance, top products & customers</p>
+  </div>
+  <a href="/admin/cashflow/" style="display:inline-block; background:#27ae60; color:#fff; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:700; font-size:.95rem; white-space:nowrap;">
+    💹 Cash Flow & Balance Sheet
+  </a>
+</div>
+{% endif %}
 {% endblock %}
 
+{% block sidebar %}
+<div id="content-related">
+  <div class="module" id="recent-actions-module">
+    <h2>{% translate 'Recent actions' %}</h2>
+    <h3>{% translate 'My actions' %}</h3>
+    {% load log %}
+    {% get_admin_log 10 as admin_log for_user user %}
+    {% if not admin_log %}
+    <p>{% translate 'None available' %}</p>
+    {% else %}
+    <ul class="actionlist">
+      {% for entry in admin_log %}
+      <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
+        {% if entry.is_deletion or not entry.get_admin_url %}
+          {{ entry.object_repr }}
+        {% else %}
+          <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+        {% endif %}
+        <br>
+        {% if entry.content_type %}
+          <span class="mini quiet">{% filter capfirst %}{% translate entry.content_type.name %}{% endfilter %}</span>
+        {% else %}
+          <span class="mini quiet">{% translate 'Unknown content' %}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
