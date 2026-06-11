@@ -580,7 +580,7 @@ def import_cost_prices(request):
     upload = request.FILES.get('cost_price_file')
     if not upload:
         messages.error(request, "No file uploaded.")
-        return redirect('/admin/cost-price-import/')
+        return redirect('/cost-prices/page/')
 
     # Optional global labour / transport for this import batch
     labour_raw    = request.POST.get('labour_cost', '0') or '0'
@@ -609,7 +609,7 @@ def import_cost_prices(request):
 
         if id_col is None or price_col is None:
             messages.error(request, "File format invalid. Make sure you used the exported template.")
-            return redirect('/admin/cost-price-import/')
+            return redirect('/cost-prices/page/')
 
         updated = 0
         skipped = 0
@@ -671,7 +671,7 @@ def import_cost_prices(request):
     except Exception as e:
         messages.error(request, f"Import failed: {e}")
 
-    return redirect('/admin/cost-price-import/')
+    return redirect('/cost-prices/page/')
 
 
 @staff_member_required

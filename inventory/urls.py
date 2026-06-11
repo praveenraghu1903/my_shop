@@ -10,6 +10,6 @@ urlpatterns = [
     path('reports/daily/', views.daily_report_download, name='daily_report_download'),
     path('cost-prices/export/', views.export_cost_price_template, name='export_cost_price_template'),
     path('cost-prices/import/', views.import_cost_prices, name='import_cost_prices'),
-    path('admin/cost-price-import/', views.cost_price_import_page, name='cost_price_import_page'),
+    path('cost-prices/page/', views.cost_price_import_page, name='cost_price_import_page'),
 ]
 
