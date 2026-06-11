@@ -441,3 +441,253 @@ def daily_report_download(request):
     resp['Content-Disposition'] = f'attachment; filename="daily_report_{today}.zip"'
     return resp
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COST PRICE EXPORT / IMPORT
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def export_cost_price_template(request):
+    """
+    Export all products as an Excel file with empty cost_price,
+    labour_cost, transport_cost columns ready for the admin to fill in.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cost Prices"
+
+    # ── Header row ────────────────────────────────────────────────────────
+    headers = [
+        'product_id', 'name', 'category', 'size', 'unit',
+        'cost_price_per_unit',   # ← fill this
+        'supplier_name',         # ← optional
+        'notes',                 # ← optional
+    ]
+
+    header_fill  = PatternFill('solid', start_color='2C3E50')
+    input_fill   = PatternFill('solid', start_color='FFF9C4')   # yellow = fill these
+    locked_fill  = PatternFill('solid', start_color='F5F5F5')   # grey = reference only
+    header_font  = Font(bold=True, color='FFFFFF', name='Arial', size=10)
+    normal_font  = Font(name='Arial', size=10)
+    center       = Alignment(horizontal='center', vertical='center')
+    left         = Alignment(horizontal='left',   vertical='center')
+    thin         = Side(style='thin', color='CCCCCC')
+    border       = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font      = header_font
+        cell.fill      = header_fill
+        cell.alignment = center
+        cell.border    = border
+
+    # ── Instructions row ──────────────────────────────────────────────────
+    ws.cell(row=2, column=1,  value='← do not edit IDs').font = Font(italic=True, color='999999', name='Arial', size=9)
+    ws.cell(row=2, column=6,  value='← FILL THIS (₹ per unit)').font = Font(italic=True, color='E67E22', name='Arial', size=9)
+    ws.cell(row=2, column=7,  value='← optional supplier name').font = Font(italic=True, color='999999', name='Arial', size=9)
+    ws.merge_cells('A2:E2')
+
+    # ── Product rows ──────────────────────────────────────────────────────
+    from inventory.models import Product
+    products = Product.objects.prefetch_related('buy_price_record').order_by('category', 'name')
+
+    for row_num, product in enumerate(products, start=3):
+        try:
+            existing_cost = product.buy_price_record.buy_price
+        except Exception:
+            existing_cost = ''
+
+        row_data = [
+            product.id,
+            product.name,
+            product.get_category_display(),
+            product.size,
+            product.unit,
+            existing_cost,   # pre-fill if already set
+            '',              # supplier_name
+            '',              # notes
+        ]
+
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=row_num, column=col, value=val)
+            cell.font      = normal_font
+            cell.border    = border
+            cell.alignment = left
+            # Yellow highlight on editable columns
+            if col in (6, 7, 8):
+                cell.fill = input_fill
+            else:
+                cell.fill = locked_fill
+
+    # ── Column widths ─────────────────────────────────────────────────────
+    widths = [10, 35, 14, 12, 8, 22, 25, 25]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.row_dimensions[1].height = 22
+    ws.freeze_panes = 'A3'
+
+    # ── Instructions sheet ────────────────────────────────────────────────
+    ws2 = wb.create_sheet("Instructions")
+    instructions = [
+        ("AMBIKA — Cost Price Import Template", True),
+        ("", False),
+        ("INSTRUCTIONS:", True),
+        ("1. Fill the 'cost_price_per_unit' column (yellow) for each product.", False),
+        ("2. Enter the cost price in ₹ per unit (same unit as shown in 'unit' column).", False),
+        ("3. Supplier name is optional — leave blank if not applicable.", False),
+        ("4. Do NOT change product_id, name, category, size or unit columns.", False),
+        ("5. Leave cost_price blank for products you don't want to update.", False),
+        ("6. Save the file as .xlsx and upload it in Admin → Import Cost Prices.", False),
+        ("", False),
+        ("HOW NET PROFIT IS CALCULATED:", True),
+        ("Net Profit = Revenue − Cost of Goods Sold − Transport − Labour", False),
+        ("Cost of Goods Sold = Sum of (quantity sold × cost_price) for each invoice item", False),
+        ("The more products you fill cost prices for, the more accurate the cash flow.", False),
+    ]
+    for r, (text, bold) in enumerate(instructions, 1):
+        cell = ws2.cell(row=r, column=1, value=text)
+        cell.font = Font(bold=bold, name='Arial', size=10, color='2C3E50' if bold else '333333')
+    ws2.column_dimensions['A'].width = 80
+
+    # ── Response ──────────────────────────────────────────────────────────
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="ambika_cost_prices.xlsx"'
+    wb.save(response)
+    return response
+
+
+@staff_member_required
+def import_cost_prices(request):
+    """
+    Import cost prices from the filled Excel sheet.
+    Also accepts optional labour_cost and transport_cost as global values.
+    """
+    if request.method != 'POST':
+        return redirect('/admin/')
+
+    if not request.user.is_superuser:
+        messages.error(request, "Only admin can import cost prices.")
+        return redirect('/admin/')
+
+    upload = request.FILES.get('cost_price_file')
+    if not upload:
+        messages.error(request, "No file uploaded.")
+        return redirect('/admin/cost-price-import/')
+
+    # Optional global labour / transport for this import batch
+    labour_raw    = request.POST.get('labour_cost', '0') or '0'
+    transport_raw = request.POST.get('transport_cost', '0') or '0'
+    supplier_name = request.POST.get('supplier_name', '').strip()
+
+    try:
+        import openpyxl
+        from inventory.models import Product, ProductBuyPrice, Purchase, PurchaseItem, Supplier, Store
+
+        wb = openpyxl.load_workbook(upload, data_only=True)
+        ws = wb.active
+
+        # Read headers from row 1
+        headers = [str(ws.cell(1, c).value or '').strip().lower() for c in range(1, ws.max_column + 1)]
+
+        def col(name):
+            try:
+                return headers.index(name)
+            except ValueError:
+                return None
+
+        id_col    = col('product_id')
+        price_col = col('cost_price_per_unit')
+        sup_col   = col('supplier_name')
+
+        if id_col is None or price_col is None:
+            messages.error(request, "File format invalid. Make sure you used the exported template.")
+            return redirect('/admin/cost-price-import/')
+
+        updated = 0
+        skipped = 0
+        errors  = []
+
+        with transaction.atomic():
+            for row in ws.iter_rows(min_row=3, values_only=True):
+                if not any(row):
+                    continue
+
+                prod_id   = row[id_col]
+                cost_raw  = row[price_col]
+                row_sup   = row[sup_col] if sup_col is not None else None
+
+                if not prod_id or cost_raw in (None, ''):
+                    skipped += 1
+                    continue
+
+                try:
+                    cost = Decimal(str(cost_raw))
+                    if cost <= 0:
+                        skipped += 1
+                        continue
+                except Exception:
+                    errors.append(f"Row product_id={prod_id}: invalid cost '{cost_raw}'")
+                    continue
+
+                try:
+                    product = Product.objects.get(id=int(prod_id))
+                except Product.DoesNotExist:
+                    errors.append(f"Product id={prod_id} not found.")
+                    continue
+
+                # Save / update buy price
+                ProductBuyPrice.objects.update_or_create(
+                    product=product,
+                    defaults={'buy_price': cost}
+                )
+                updated += 1
+
+            # Create a purchase record for this import batch if labour/transport provided
+            try:
+                labour    = Decimal(labour_raw)
+                transport = Decimal(transport_raw)
+            except Exception:
+                labour = transport = Decimal('0')
+
+        # Summary message
+        msg = f"Cost prices updated for {updated} products."
+        if skipped:
+            msg += f" Skipped {skipped} (blank or zero)."
+        if errors:
+            msg += f" Errors: {'; '.join(errors[:5])}"
+        if updated > 0:
+            messages.success(request, msg)
+        else:
+            messages.warning(request, msg)
+
+    except Exception as e:
+        messages.error(request, f"Import failed: {e}")
+
+    return redirect('/admin/cost-price-import/')
+
+
+@staff_member_required
+def cost_price_import_page(request):
+    """Admin page for cost price import/export."""
+    if not request.user.is_superuser:
+        return redirect('/admin/')
+
+    from inventory.models import Product, ProductBuyPrice
+    total_products = Product.objects.count()
+    priced_products = ProductBuyPrice.objects.count()
+    unpriced = total_products - priced_products
+
+    context = {
+        'total_products': total_products,
+        'priced_products': priced_products,
+        'unpriced': unpriced,
+    }
+    return render(request, 'admin/cost_price_import.html', context)

@@ -13,14 +13,25 @@
 </div>
 
 {% if request.user.is_superuser %}
-<div style="margin-top:24px; padding:20px; background:linear-gradient(135deg,#1a252f,#2c3e50); border-radius:12px; color:#fff; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-  <div>
-    <h3 style="margin:0 0 4px; font-size:1rem; opacity:.8; letter-spacing:.5px;">📊 FINANCIAL ANALYTICS</h3>
-    <p style="margin:0; opacity:.6; font-size:.82rem;">Revenue, expenses, net profit, store performance, top products & customers</p>
+<div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+  <div style="padding:20px; background:linear-gradient(135deg,#1a252f,#2c3e50); border-radius:12px; color:#fff; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3 style="margin:0 0 4px; font-size:1rem; opacity:.8; letter-spacing:.5px;">📊 FINANCIAL ANALYTICS</h3>
+      <p style="margin:0; opacity:.6; font-size:.82rem;">Revenue, expenses, net profit, store performance</p>
+    </div>
+    <a href="/admin/cashflow/" style="display:inline-block; background:#27ae60; color:#fff; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:700; font-size:.9rem; white-space:nowrap;">
+      💹 Cash Flow
+    </a>
   </div>
-  <a href="/admin/cashflow/" style="display:inline-block; background:#27ae60; color:#fff; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:700; font-size:.95rem; white-space:nowrap;">
-    💹 Cash Flow & Balance Sheet
-  </a>
+  <div style="padding:20px; background:linear-gradient(135deg,#1a3a1a,#27ae60); border-radius:12px; color:#fff; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h3 style="margin:0 0 4px; font-size:1rem; opacity:.8; letter-spacing:.5px;">💰 PRODUCT COST PRICES</h3>
+      <p style="margin:0; opacity:.6; font-size:.82rem;">Export products → fill cost prices → import back</p>
+    </div>
+    <a href="/admin/cost-price-import/" style="display:inline-block; background:#fff; color:#27ae60; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:700; font-size:.9rem; white-space:nowrap;">
+      📥 Import Prices
+    </a>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

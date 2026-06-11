@@ -120,6 +120,15 @@ class Location(models.Model):
     def __str__(self):
         return self.name
 
+class ProductBuyPrice(models.Model):
+    """Cost price of a product — admin only. Used for cash flow / margin calculations."""
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='buy_price_record')
+    buy_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Cost price per unit paid to supplier")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product.name} ({self.product.size}) — ₹{self.buy_price}"
+
 class InvoiceContact(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='contacts', on_delete=models.CASCADE)
     mobile = models.CharField(max_length=15)

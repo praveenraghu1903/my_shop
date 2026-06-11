@@ -1,0 +1,141 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Import Cost Prices{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+body { background:#f4f6f9; }
+.cp-card { background:#fff; border-radius:12px; padding:28px; box-shadow:0 1px 8px rgba(0,0,0,.08); margin-bottom:20px; }
+.cp-title { font-size:1rem; font-weight:700; color:#2c3e50; border-left:4px solid #2980b9; padding-left:10px; margin:0 0 18px; }
+.stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+.stat { border-radius:10px; padding:16px 20px; color:#fff; }
+.stat h3 { margin:4px 0 0; font-size:1.6rem; font-weight:700; }
+.stat p  { margin:0; font-size:.8rem; opacity:.85; }
+.bg-g { background:linear-gradient(135deg,#27ae60,#1e8449); }
+.bg-o { background:linear-gradient(135deg,#e67e22,#a04000); }
+.bg-b { background:linear-gradient(135deg,#2980b9,#1a5276); }
+.step { display:flex; gap:14px; align-items:flex-start; margin-bottom:16px; }
+.step-num { background:#2980b9; color:#fff; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.85rem; flex-shrink:0; margin-top:2px; }
+.step-text strong { display:block; margin-bottom:2px; color:#2c3e50; }
+.step-text p { margin:0; color:#666; font-size:.85rem; }
+.upload-area { border:2px dashed #2980b9; border-radius:10px; padding:24px; text-align:center; background:#f0f7ff; cursor:pointer; transition:.2s; }
+.upload-area:hover { background:#e3f0ff; }
+.upload-area input { display:none; }
+.btn-primary { background:#2980b9; color:#fff; border:none; padding:10px 24px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; }
+.btn-primary:hover { background:#1a5276; }
+.btn-green { background:#27ae60; color:#fff; border:none; padding:10px 24px; border-radius:8px; cursor:pointer; font-weight:600; font-size:.9rem; text-decoration:none; display:inline-block; }
+.btn-green:hover { background:#1e8449; color:#fff; }
+.note { background:#fff8e1; border-left:4px solid #f39c12; padding:12px 16px; border-radius:6px; font-size:.85rem; color:#555; margin-top:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+  <div>
+    <h1 style="margin:0; font-size:1.5rem;">📥 Import Cost Prices</h1>
+    <p style="margin:4px 0 0; color:#888; font-size:.85rem;">Export all products → fill cost prices in Excel → import back</p>
+  </div>
+  <a href="/admin/" style="font-size:.85rem; color:#2980b9;">← Back to Admin</a>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+  <div style="padding:12px 16px; border-radius:8px; margin-bottom:16px;
+    background:{% if msg.tags == 'success' %}#d4edda{% elif msg.tags == 'error' %}#f8d7da{% else %}#fff3cd{% endif %};
+    color:{% if msg.tags == 'success' %}#155724{% elif msg.tags == 'error' %}#721c24{% else %}#856404{% endif %};">
+    {{ msg }}
+  </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Stats -->
+<div class="stat-row">
+  <div class="stat bg-b"><p>Total Products</p><h3>{{ total_products }}</h3></div>
+  <div class="stat bg-g"><p>Cost Price Set</p><h3>{{ priced_products }}</h3></div>
+  <div class="stat bg-o"><p>Missing Cost Price</p><h3>{{ unpriced }}</h3></div>
+</div>
+
+<!-- Steps -->
+<div class="cp-card">
+  <p class="cp-title">How It Works</p>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-text">
+      <strong>Download the template</strong>
+      <p>Click the button below to download an Excel file with all {{ total_products }} products listed. Yellow columns are for you to fill.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-text">
+      <strong>Fill in cost prices</strong>
+      <p>Open the file in Excel or Google Sheets. Fill the <strong>cost_price_per_unit</strong> column (₹ per unit) for each product. Leave blank for products you don't know yet.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-text">
+      <strong>Upload the filled file</strong>
+      <p>Save as .xlsx and upload below. Existing cost prices will be updated, new ones added. You can do this multiple times.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;">
+    <a href="/cost-prices/export/" class="btn-green">⬇️ Download Product Template (.xlsx)</a>
+  </div>
+
+  <div class="note">
+    <strong>📌 Tip:</strong> You don't have to fill all {{ total_products }} products at once.
+    Fill what you know, import, and come back for the rest. Already-set prices are shown in the downloaded file.
+  </div>
+</div>
+
+<!-- Upload form -->
+<div class="cp-card">
+  <p class="cp-title">Upload Filled Excel File</p>
+  <form method="post" action="/cost-prices/import/" enctype="multipart/form-data" id="upload-form">
+    {% csrf_token %}
+
+    <div class="upload-area" onclick="document.getElementById('file-input').click()">
+      <input type="file" name="cost_price_file" id="file-input" accept=".xlsx" onchange="showFilename(this)">
+      <div id="upload-label">
+        <p style="font-size:1.5rem; margin:0;">📂</p>
+        <p style="margin:4px 0 0; font-weight:600; color:#2980b9;">Click to select .xlsx file</p>
+        <p style="margin:4px 0 0; color:#888; font-size:.82rem;">Only .xlsx files supported</p>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+      <div>
+        <label style="display:block; font-size:.85rem; font-weight:600; margin-bottom:4px; color:#555;">
+          Labour Cost for this batch (₹) <span style="font-weight:400; color:#aaa;">optional</span>
+        </label>
+        <input type="number" step="0.01" name="labour_cost" class="form-control" value="0"
+          style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:.9rem;">
+      </div>
+      <div>
+        <label style="display:block; font-size:.85rem; font-weight:600; margin-bottom:4px; color:#555;">
+          Transport Cost for this batch (₹) <span style="font-weight:400; color:#aaa;">optional</span>
+        </label>
+        <input type="number" step="0.01" name="transport_cost" class="form-control" value="0"
+          style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:.9rem;">
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <button type="submit" class="btn-primary">⬆️ Import Cost Prices</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function showFilename(input) {
+  if (input.files && input.files[0]) {
+    document.getElementById('upload-label').innerHTML =
+      '<p style="font-size:1.2rem; margin:0;">✅</p>' +
+      '<p style="margin:4px 0 0; font-weight:600; color:#27ae60;">' + input.files[0].name + '</p>' +
+      '<p style="margin:4px 0 0; color:#888; font-size:.82rem;">Ready to import</p>';
+  }
+}
+</script>
+{% endblock %}
