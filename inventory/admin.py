@@ -6,6 +6,7 @@ from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django import forms
 from decimal import Decimal
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 
 class ProductAdminForm(forms.ModelForm):
     """Custom form for Product admin that includes initial quantity, store and location setup"""
@@ -184,6 +185,12 @@ class InvoiceAdmin(admin.ModelAdmin):
     search_fields = ('customer_name', 'customer_mobile', 'contacts__mobile')
     inlines = [InvoiceItemInline, InvoiceContactInline]
     readonly_fields = ('date',)
+    actions = [
+        'move_to_gairatganj',
+        'move_to_silwani',
+        'mark_fully_paid',
+        'export_selected_csv',
+    ]
 
     fieldsets = (
         (None, {
@@ -266,6 +273,51 @@ class InvoiceAdmin(admin.ModelAdmin):
 
     balance_due_display.short_description = 'Balance Due'
     balance_due_display.admin_order_field = 'balance_due_annot'
+
+    # ── Bulk Actions ─────────────────────────────────────────────────────
+
+    def move_to_gairatganj(self, request, queryset):
+        store = Store.objects.filter(name__icontains='gairatganj').first()
+        if not store:
+            self.message_user(request, "No store found matching 'Gairatganj'.", level='ERROR')
+            return
+        updated = queryset.update(store=store)
+        self.message_user(request, f"{updated} invoice(s) moved to {store.name}.")
+    move_to_gairatganj.short_description = "Move selected invoices to Gairatganj"
+
+    def move_to_silwani(self, request, queryset):
+        store = Store.objects.filter(name__icontains='silwani').first()
+        if not store:
+            self.message_user(request, "No store found matching 'Silwani'.", level='ERROR')
+            return
+        updated = queryset.update(store=store)
+        self.message_user(request, f"{updated} invoice(s) moved to {store.name}.")
+    move_to_silwani.short_description = "Move selected invoices to Silwani"
+
+    def mark_fully_paid(self, request, queryset):
+        updated = 0
+        for invoice in queryset:
+            if invoice.paid_amount != invoice.total_amount:
+                invoice.paid_amount = invoice.total_amount
+                invoice.save(update_fields=['paid_amount'])
+                updated += 1
+        self.message_user(request, f"{updated} invoice(s) marked as fully paid.")
+    mark_fully_paid.short_description = "Mark selected invoices as fully paid"
+
+    def export_selected_csv(self, request, queryset):
+        import csv
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="invoices_export.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Customer', 'Mobile', 'Store', 'Date', 'Total', 'Paid', 'Due'])
+        for inv in queryset:
+            writer.writerow([
+                inv.id, inv.customer_name, inv.customer_mobile, inv.store.name,
+                inv.date.strftime('%Y-%m-%d'), inv.total_amount, inv.paid_amount,
+                inv.total_amount - inv.paid_amount,
+            ])
+        return response
+    export_selected_csv.short_description = "Export selected invoices to CSV"
 
 @admin.register(DueInvoice)
 class DueInvoiceAdmin(InvoiceAdmin):
