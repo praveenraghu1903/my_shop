@@ -201,6 +201,7 @@ class InvoiceAdmin(admin.ModelAdmin):
                 'total_amount',
                 'discount_amount',
                 'transport_cost',
+                'transporter_name',
                 'labour_cost',
                 'other_expenses',
                 'paid_amount',
@@ -219,35 +220,89 @@ class InvoiceAdmin(admin.ModelAdmin):
         """
         Override to recalculate invoice total_amount when invoice items are added/modified/deleted.
         This fixes the issue where adding products to existing invoices doesn't update the total.
+
+        Also keeps Godown Stock in sync with invoice item edits: increasing a line's
+        quantity (or adding a new line) deducts the extra from stock, decreasing a
+        line's quantity (or deleting a line) returns the difference to stock.
         """
+        is_invoice_items = formset.model == InvoiceItem
+        godown = None
+        original_by_id = {}
+
+        if is_invoice_items:
+            godown = Store.objects.filter(store_type='GODOWN').first()
+            # Snapshot original quantities/products BEFORE the formset touches anything,
+            # since Django binds new POST values onto form.instance during validation.
+            original_by_id = {
+                row['id']: (row['product_id'], row['quantity'])
+                for row in InvoiceItem.objects.filter(invoice=form.instance).values('id', 'product_id', 'quantity')
+            }
+
+        def adjust_stock(product, delta):
+            """delta > 0 returns stock, delta < 0 deducts stock."""
+            if not godown or not delta:
+                return
+            stock, _ = Stock.objects.get_or_create(product=product, store=godown, defaults={'quantity': Decimal('0')})
+            stock.quantity += delta
+            stock.save()
+            if stock.quantity < 0:
+                messages.warning(
+                    request,
+                    f"Warning: stock for '{product.name}' is now negative ({stock.quantity}) after this edit."
+                )
+
+        def adjust_stock_by_id(product_id, delta):
+            if not godown or not delta:
+                return
+            stock, _ = Stock.objects.get_or_create(product_id=product_id, store=godown, defaults={'quantity': Decimal('0')})
+            stock.quantity += delta
+            stock.save()
+
         # Save the formset first (this saves all the invoice items)
         instances = formset.save(commit=False)
-        
-        # Handle deleted items
+
+        # Handle deleted items — return their full quantity to stock
         for obj in formset.deleted_objects:
+            if is_invoice_items:
+                adjust_stock(obj.product, obj.quantity)
             obj.delete()
-        
-        # Save new/modified items
+
+        # Save new/modified items — adjust stock by the quantity delta
         for instance in instances:
+            if is_invoice_items:
+                original = original_by_id.get(instance.pk)
+                if original is None:
+                    # Brand new line item: deduct full quantity from stock
+                    adjust_stock(instance.product, -instance.quantity)
+                else:
+                    original_product_id, original_qty = original
+                    if original_product_id != instance.product_id:
+                        # Product on this line was swapped: return old product's qty,
+                        # deduct new product's qty
+                        adjust_stock_by_id(original_product_id, original_qty)
+                        adjust_stock(instance.product, -instance.quantity)
+                    else:
+                        delta = instance.quantity - original_qty
+                        adjust_stock(instance.product, -delta)
             instance.save()
-        
+
         formset.save_m2m()
-        
+
         # Now recalculate the invoice total based on all current items
         invoice = form.instance
-        
+
         # Check if this is the InvoiceItem formset (not InvoiceContact)
-        if formset.model == InvoiceItem:
+        if is_invoice_items:
             # Calculate sum of all invoice items (quantity × rate)
             items_total = Decimal('0')
             for item in invoice.items.all():
                 items_total += item.quantity * item.rate
-            
+
             # Recalculate total_amount: items_total + transport + labour - discount
             invoice.total_amount = (
-                items_total + 
-                (invoice.transport_cost or Decimal('0')) + 
-                (invoice.labour_cost or Decimal('0')) - 
+                items_total +
+                (invoice.transport_cost or Decimal('0')) +
+                (invoice.labour_cost or Decimal('0')) -
                 (invoice.discount_amount or Decimal('0'))
             )
             invoice.save(update_fields=['total_amount'])

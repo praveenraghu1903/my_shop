@@ -75,6 +75,7 @@ class Invoice(models.Model):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     transport_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    transporter_name = models.CharField(max_length=100, blank=True, null=True, help_text="Name of the transporter carrying the goods")
     labour_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2)

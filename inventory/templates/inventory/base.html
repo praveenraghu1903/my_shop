@@ -65,9 +65,10 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Auto-close alerts after 5 seconds
+        // Auto-close alerts after 5 seconds (the WhatsApp share banner has its
+        // own longer timer, so it's excluded here)
         setTimeout(function() {
-            var alerts = document.querySelectorAll('.alert');
+            var alerts = document.querySelectorAll('.alert:not(#whatsapp-banner)');
             alerts.forEach(function(alert) {
                 var bsAlert = new bootstrap.Alert(alert);
                 bsAlert.close();
