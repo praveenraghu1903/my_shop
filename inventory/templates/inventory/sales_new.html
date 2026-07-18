@@ -62,6 +62,11 @@ const invoiceMsg = `🧾 *AMBIKA — Invoice #{{ last_invoice.id }}*
 *Items:*
 {% for item in last_invoice.items.all %}- {{ item.product.name }} ({{ item.product.size }}) × {{ item.quantity|floatformat:0 }} {{ item.product.unit }} @ ₹{{ item.rate|floatformat:2 }} = ₹{{ item.item_total|floatformat:2 }}
 {% endfor %}
+{% if last_invoice.transport_cost > 0 %}🚚 Transport Charges: ₹{{ last_invoice.transport_cost|floatformat:2 }}
+{% endif %}{% if last_invoice.labour_cost > 0 %}🛠️ Labour Charges: ₹{{ last_invoice.labour_cost|floatformat:2 }}
+{% endif %}{% if last_invoice.discount_amount > 0 %}➖ Discount: ₹{{ last_invoice.discount_amount|floatformat:2 }}
+{% endif %}{% if last_invoice.transporter_name %}🚛 Transporter: {{ last_invoice.transporter_name }}
+{% endif %}
 💰 Total: ₹{{ last_invoice.total_amount|floatformat:2 }}
 ✅ Paid: ₹{{ last_invoice.paid_amount|floatformat:2 }}
 {% if last_invoice.balance_due > 0 %}⚠️ Due: ₹{{ last_invoice.balance_due|floatformat:2 }}{% else %}✔️ Fully Paid{% endif %}
@@ -86,6 +91,16 @@ function openWhatsAppManual() {
   if (num.length < 10) { alert('Please enter a valid 10-digit number'); return; }
   window.open(`https://wa.me/91${num}?text=${encodedMsg}`, '_blank');
 }
+
+// Keep this banner up for 30 seconds so there's enough time to share on WhatsApp
+// (longer than the default 5s auto-close used for regular alert messages).
+setTimeout(function() {
+  var banner = document.getElementById('whatsapp-banner');
+  if (banner && window.bootstrap) {
+    var bsAlert = bootstrap.Alert.getOrCreateInstance(banner);
+    bsAlert.close();
+  }
+}, 30000);
 </script>
 {% endif %}
 <div class="row mb-4">
@@ -125,11 +140,17 @@ function openWhatsAppManual() {
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="customer_name" class="form-label">Customer Name</label>
-                    <input type="text" class="form-control" name="customer_name" required>
+                    <input type="text" class="form-control" id="customer_name" name="customer_name" list="known-customer-names" autocomplete="off" required>
+                    <datalist id="known-customer-names">
+                        {% for name in known_customer_names %}
+                        <option value="{{ name }}"></option>
+                        {% endfor %}
+                    </datalist>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label" for="customer_mobile">Mobile Number</label>
                     <input type="tel" class="form-control" id="customer_mobile" name="customer_mobile" placeholder="10-digit mobile number">
+                    <small class="text-muted" id="mobile-autofill-hint" style="display:none;">Auto-filled from last visit — change if needed</small>
                 </div>
             </div>
 
@@ -213,6 +234,15 @@ function openWhatsAppManual() {
                     <small class="text-muted">Labour charges to add</small>
                 </div>
 
+                <!-- Transporter Name -->
+                <div class="col-md-6 mb-3">
+                    <label for="transporter_name" class="form-label fw-bold">Transporter Name</label>
+                    <input type="text" class="form-control" name="transporter_name" id="transporter_name" placeholder="e.g. Ramesh Transport">
+                    <small class="text-muted">Shown to the customer on the bill (optional)</small>
+                </div>
+            </div>
+
+            <div class="row">
                 <!-- Final Amount -->
                 <div class="col-md-6 mb-3">
                     <label for="total" class="form-label fw-bold text-success">Final Amount (₹)</label>
@@ -272,6 +302,43 @@ function openWhatsAppManual() {
     }
 
     $(document).ready(function() {
+        // Auto-fill mobile number from the customer's last visit.
+        // Only fills the field when it's empty, so it never overwrites a number
+        // the shopkeeper has already typed — they're always free to change it.
+        const customerNameInput = document.getElementById('customer_name');
+        const customerMobileInput = document.getElementById('customer_mobile');
+        const mobileHint = document.getElementById('mobile-autofill-hint');
+        let mobileLookupTimer = null;
+
+        function lookupCustomerMobile() {
+            const name = customerNameInput.value.trim();
+            if (!name || customerMobileInput.value.trim()) {
+                return;
+            }
+            fetch(`{% url 'customer_mobile_lookup' %}?name=${encodeURIComponent(name)}`)
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.mobile && !customerMobileInput.value.trim()) {
+                        customerMobileInput.value = data.mobile;
+                        if (mobileHint) mobileHint.style.display = 'block';
+                    }
+                })
+                .catch(function() { /* silently ignore lookup failures */ });
+        }
+
+        if (customerNameInput) {
+            customerNameInput.addEventListener('input', function() {
+                clearTimeout(mobileLookupTimer);
+                mobileLookupTimer = setTimeout(lookupCustomerMobile, 400);
+            });
+            customerNameInput.addEventListener('change', lookupCustomerMobile);
+        }
+        if (customerMobileInput && mobileHint) {
+            customerMobileInput.addEventListener('input', function() {
+                mobileHint.style.display = 'none';
+            });
+        }
+
         // Build a location ID -> name map for fast lookup
         const LOCATION_MAP = {
             {% for loc in locations %}

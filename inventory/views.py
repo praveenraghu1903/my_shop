@@ -61,6 +61,7 @@ def sales_new(request):
         paid_amount = Decimal(request.POST.get('paid_amount'))
         discount_amount = Decimal(request.POST.get('discount_amount') or '0')
         transport_cost = Decimal(request.POST.get('transport_cost') or '0')
+        transporter_name = (request.POST.get('transporter_name') or '').strip() or None
         labour_cost = Decimal(request.POST.get('labour_cost') or '0')
         other_expenses = transport_cost + labour_cost
 
@@ -119,6 +120,7 @@ def sales_new(request):
                     customer_mobile=primary_mobile,
                     discount_amount=discount_amount,
                     transport_cost=transport_cost,
+                    transporter_name=transporter_name,
                     labour_cost=labour_cost,
                     other_expenses=other_expenses,
                     total_amount=(total_amount + transport_cost + labour_cost - discount_amount),
@@ -157,6 +159,14 @@ def sales_new(request):
         except Invoice.DoesNotExist:
             pass
 
+    # Distinct customer names seen so far, for the name-suggestion datalist
+    known_customer_names = (
+        Invoice.objects.exclude(customer_name='')
+        .order_by('customer_name')
+        .values_list('customer_name', flat=True)
+        .distinct()
+    )
+
     context = {
         'products': products,
         'locations': locations,
@@ -165,8 +175,31 @@ def sales_new(request):
         'today_received': today_received,
         'today_due': today_due,
         'last_invoice': last_invoice,
+        'known_customer_names': known_customer_names,
     }
     return render(request, 'inventory/sales_new.html', context)
+
+
+@login_required
+def customer_mobile_lookup(request):
+    """
+    Given a customer name (?name=...), return the most recently used mobile
+    number for that customer, so the sales form can auto-fill it.
+    """
+    from django.http import JsonResponse
+
+    name = (request.GET.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'mobile': None})
+
+    invoice = (
+        Invoice.objects.filter(customer_name__iexact=name)
+        .exclude(customer_mobile__isnull=True)
+        .exclude(customer_mobile='')
+        .order_by('-date')
+        .first()
+    )
+    return JsonResponse({'mobile': invoice.customer_mobile if invoice else None})
 
 @staff_member_required
 def sales_summary(request):
