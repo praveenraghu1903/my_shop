@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'axes',
     'inventory',
 ]
 
@@ -56,7 +57,22 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Must be last: enforces the lockouts tracked by AxesStandaloneBackend below
+    'axes.middleware.AxesMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    # AxesStandaloneBackend must be first so failed attempts are always recorded
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# django-axes: lock out an IP/username pair after repeated failed logins.
+# Applies to both /admin/ and the staff login page, since both go through
+# Django's standard authenticate().
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # hours
+AXES_RESET_ON_SUCCESS = True
 
 ROOT_URLCONF = 'tiles_automation.urls'
 
@@ -140,6 +156,18 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.onrender.com'
 ]
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# HTTPS / cookie hardening — only enforced when DEBUG is off (i.e. in production
+# on Render), so local development over plain http:// still works normally.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Start conservative (1 hour) rather than the usual 1-year recommendation —
+    # ramp this up once HTTPS has been confirmed stable in production.
+    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 # Email configuration (console backend in DEBUG; SMTP in production via env)
 if DEBUG:
