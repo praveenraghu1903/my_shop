@@ -337,18 +337,24 @@ def product_import(request):
             # Load rows from one of: Google Sheet URL (CSV), uploaded CSV, uploaded XLSX
             rows = None
             if sheet_url and not upload:
-                # Accept Google Sheets share links; convert to export CSV if needed
+                # Only accept genuine Google Sheets share/export links — reject
+                # everything else so this can't be used to make the server fetch
+                # arbitrary/internal URLs (SSRF).
                 parsed = urlparse(sheet_url)
-                if 'docs.google.com' in parsed.netloc and '/spreadsheets/' in parsed.path:
-                    if '/export' not in parsed.path:
-                        # Convert /edit to /export
-                        path_base = parsed.path.split('/edit')[0]
-                        query = parse_qs(parsed.query)
-                        gid = query.get('gid', ['0'])[0]
-                        new_path = f"{path_base}/export"
-                        new_query = f"format=csv&gid={gid}"
-                        parsed = parsed._replace(path=new_path, query=new_query)
-                    sheet_url = urlunparse(parsed)
+                if parsed.scheme != 'https' or parsed.netloc != 'docs.google.com' or not parsed.path.startswith('/spreadsheets/'):
+                    messages.error(request, 'Only Google Sheets URLs (https://docs.google.com/spreadsheets/...) are supported.')
+                    return redirect('product_import')
+
+                # Convert /edit to /export
+                if '/export' not in parsed.path:
+                    path_base = parsed.path.split('/edit')[0]
+                    query = parse_qs(parsed.query)
+                    gid = query.get('gid', ['0'])[0]
+                    new_path = f"{path_base}/export"
+                    new_query = f"format=csv&gid={gid}"
+                    parsed = parsed._replace(path=new_path, query=new_query)
+                sheet_url = urlunparse(parsed)
+
                 # Fetch CSV content
                 req = Request(sheet_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urlopen(req, timeout=20) as resp:
