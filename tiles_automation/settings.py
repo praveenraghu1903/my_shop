@@ -67,12 +67,27 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# django-axes: lock out an IP/username pair after repeated failed logins.
-# Applies to both /admin/ and the staff login page, since both go through
-# Django's standard authenticate().
+# django-axes: lock out a specific username+IP pair after repeated failed
+# logins. Applies to both /admin/ and the staff login page, since both go
+# through Django's standard authenticate().
+#
+# IMPORTANT: the default AXES_LOCKOUT_PARAMETERS is ['ip_address'] alone,
+# which locks out EVERYONE behind a shared connection (e.g. a whole shop)
+# after one person mistypes their password a few times.
+#
+# A flat list like ['username', 'ip_address'] does NOT mean "combine both" —
+# axes treats each entry as an INDEPENDENT check and locks if EITHER one
+# exceeds the limit, so a plain IP-based lockout would still bleed onto
+# every other user on that connection. The nested form below is what
+# actually combines them into a single username+ip_address key, so only
+# that one account from that one connection gets locked.
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hours
 AXES_RESET_ON_SUCCESS = True
+# Don't extend the lockout every time someone retries while still locked out —
+# without this, repeatedly hitting "try again" resets the 1-hour timer forever.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
 
 ROOT_URLCONF = 'tiles_automation.urls'
 
