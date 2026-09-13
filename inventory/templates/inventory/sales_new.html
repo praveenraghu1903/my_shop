@@ -435,6 +435,190 @@ setTimeout(function() {
                 recalcTotals();
             }
         });
+
+        // ── Customer name autofill ───────────────────────────────────────
+        const customerInput = document.getElementById('customer_name');
+        const suggestionsBox = document.getElementById('customer-suggestions');
+        const mobileInput = document.getElementById('customer_mobile');
+        const mobileHint = document.getElementById('mobile-hint');
+        let debounceTimer;
+
+        if (customerInput) {
+            customerInput.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                const q = this.value.trim();
+                if (q.length < 2) { suggestionsBox.style.display = 'none'; return; }
+                debounceTimer = setTimeout(() => {
+                    fetch(`/api/customer-lookup/?name=${encodeURIComponent(q)}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            suggestionsBox.innerHTML = '';
+                            if (!data.results.length) { suggestionsBox.style.display = 'none'; return; }
+                            data.results.forEach(c => {
+                                const item = document.createElement('button');
+                                item.type = 'button';
+                                item.className = 'list-group-item list-group-item-action py-1 px-2';
+                                item.innerHTML = `<strong>${c.name}</strong> ${c.mobile ? '<span class="text-muted ms-2">📞 ' + c.mobile + '</span>' : ''}`;
+                                item.addEventListener('click', () => {
+                                    customerInput.value = c.name;
+                                    if (c.mobile && mobileInput) {
+                                        mobileInput.value = c.mobile;
+                                        if (mobileHint) {
+                                            mobileHint.textContent = '✓ Auto-filled from previous visit';
+                                            mobileHint.className = 'text-success small';
+                                        }
+                                    }
+                                    suggestionsBox.style.display = 'none';
+                                    saveFormDraft();
+                                });
+                                suggestionsBox.appendChild(item);
+                            });
+                            suggestionsBox.style.display = 'block';
+                        }).catch(() => {});
+                }, 250);
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!customerInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                    suggestionsBox.style.display = 'none';
+                }
+            });
+        }
+
+    }); // end document.ready
+
+    // ── Form draft auto-save to localStorage ─────────────────────────────
+    // Saves every 5 seconds and on every input. Restores on page load.
+    // Clears on successful form submit.
+    const DRAFT_KEY = 'sales_form_draft';
+
+    function saveFormDraft() {
+        try {
+            const draft = {
+                customer_name: document.querySelector('[name=customer_name]')?.value || '',
+                customer_mobile: document.querySelector('[name=customer_mobile]')?.value || '',
+                transporter_name: document.querySelector('[name=transporter_name]')?.value || '',
+                paid_amount: document.querySelector('[name=paid_amount]')?.value || '',
+                discount_amount: document.querySelector('[name=discount_amount]')?.value || '',
+                transport_cost: document.querySelector('[name=transport_cost]')?.value || '',
+                labour_cost: document.querySelector('[name=labour_cost]')?.value || '',
+                items: [],
+                saved_at: new Date().toISOString(),
+            };
+            document.querySelectorAll('.sale-item').forEach(row => {
+                draft.items.push({
+                    product: row.querySelector('[name=product]')?.value || '',
+                    quantity: row.querySelector('[name=quantity]')?.value || '',
+                    rate: row.querySelector('[name=rate]')?.value || '',
+                    location: row.querySelector('[name=location]')?.value || '',
+                });
+            });
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        } catch(e) {}
+    }
+
+    function restoreFormDraft() {
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+
+            // Only restore if draft is less than 2 hours old
+            const age = (new Date() - new Date(draft.saved_at)) / 1000 / 60;
+            if (age > 120) { localStorage.removeItem(DRAFT_KEY); return; }
+
+            // Don't restore if the form already has data (e.g. after a failed save)
+            const customerField = document.querySelector('[name=customer_name]');
+            if (customerField && customerField.value) return;
+
+            if (draft.customer_name) customerField.value = draft.customer_name;
+            const mob = document.querySelector('[name=customer_mobile]');
+            if (mob && draft.customer_mobile) mob.value = draft.customer_mobile;
+            const trans = document.querySelector('[name=transporter_name]');
+            if (trans && draft.transporter_name) trans.value = draft.transporter_name;
+            const paid = document.querySelector('[name=paid_amount]');
+            if (paid && draft.paid_amount) paid.value = draft.paid_amount;
+            const disc = document.querySelector('[name=discount_amount]');
+            if (disc && draft.discount_amount) disc.value = draft.discount_amount;
+            const tc = document.querySelector('[name=transport_cost]');
+            if (tc && draft.transport_cost) tc.value = draft.transport_cost;
+            const lc = document.querySelector('[name=labour_cost]');
+            if (lc && draft.labour_cost) lc.value = draft.labour_cost;
+
+            // Restore items
+            if (draft.items && draft.items.length > 0) {
+                const container = document.getElementById('items-container');
+                // Clear existing empty rows first
+                const existingRows = container.querySelectorAll('.sale-item');
+                if (existingRows.length === 1) {
+                    const firstRow = existingRows[0];
+                    const firstProduct = firstRow.querySelector('[name=product]');
+                    if (!firstProduct || !firstProduct.value) {
+                        firstRow.remove();
+                    }
+                }
+                draft.items.forEach(item => {
+                    if (!item.product) return;
+                    const newRow = document.querySelector('.sale-item')?.cloneNode(true) ||
+                                   container.querySelector('.sale-item:last-child')?.cloneNode(true);
+                    if (!newRow) return;
+                    const sel = newRow.querySelector('[name=product]');
+                    if (sel) sel.value = item.product;
+                    const qty = newRow.querySelector('[name=quantity]');
+                    if (qty) qty.value = item.quantity;
+                    const rate = newRow.querySelector('[name=rate]');
+                    if (rate) rate.value = item.rate;
+                    const loc = newRow.querySelector('[name=location]');
+                    if (loc) loc.value = item.location;
+                    container.appendChild(newRow);
+                });
+                if (typeof recalcTotals === 'function') recalcTotals();
+            }
+
+            // Show restore notice
+            const notice = document.createElement('div');
+            notice.className = 'alert alert-info alert-dismissible fade show mb-3';
+            notice.innerHTML = `📋 <strong>Draft restored</strong> — your previously filled data has been recovered. 
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="clearFormDraft()">Clear draft</button>`;
+            const form = document.querySelector('form');
+            if (form) form.insertAdjacentElement('beforebegin', notice);
+
+        } catch(e) {}
+    }
+
+    function clearFormDraft() {
+        localStorage.removeItem(DRAFT_KEY);
+        const notice = document.querySelector('.alert-info');
+        if (notice) notice.remove();
+    }
+
+    // Save draft on any input change
+    document.addEventListener('input', saveFormDraft);
+    document.addEventListener('change', saveFormDraft);
+
+    // Save draft every 5 seconds automatically
+    setInterval(saveFormDraft, 5000);
+
+    // Clear draft on successful form submit
+    const salesForm = document.querySelector('form[method=post]');
+    if (salesForm) {
+        salesForm.addEventListener('submit', function() {
+            localStorage.removeItem(DRAFT_KEY);
+        });
+    }
+
+    // Restore draft when page loads
+    window.addEventListener('DOMContentLoaded', function() {
+        // Small delay to let the form initialize first
+        setTimeout(restoreFormDraft, 400);
     });
+
+    // ── Keepalive ping every 10 minutes ──────────────────────────────────
+    // Keeps Render service warm and session alive while form is being filled
+    setInterval(function() {
+        fetch('/sales/new/', { method: 'HEAD', credentials: 'same-origin' }).catch(() => {});
+    }, 10 * 60 * 1000); // every 10 minutes
+
 </script>
 {% endblock %}

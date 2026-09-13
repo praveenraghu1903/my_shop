@@ -184,6 +184,13 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
 
+# ── Session persistence ───────────────────────────────────────────────────
+# Store sessions in DB — survives Render restarts
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400 * 30        # 30 days
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False # don't expire when tab closes
+SESSION_SAVE_EVERY_REQUEST = True       # refresh timer on every request
+
 # Email configuration (console backend in DEBUG; SMTP in production via env)
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
