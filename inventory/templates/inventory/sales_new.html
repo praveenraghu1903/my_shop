@@ -440,10 +440,9 @@ setTimeout(function() {
         const customerInput = document.getElementById('customer_name');
         const suggestionsBox = document.getElementById('customer-suggestions');
         const mobileInput = document.getElementById('customer_mobile');
-        const mobileHint = document.getElementById('mobile-hint');
         let debounceTimer;
 
-        if (customerInput) {
+        if (customerInput && suggestionsBox) {
             customerInput.addEventListener('input', function() {
                 clearTimeout(debounceTimer);
                 const q = this.value.trim();
@@ -491,6 +490,7 @@ setTimeout(function() {
     // Saves every 5 seconds and on every input. Restores on page load.
     // Clears on successful form submit.
     const DRAFT_KEY = 'sales_form_draft';
+    const DRAFT_RESTORE_ENABLED = false;
 
     function saveFormDraft() {
         try {
@@ -518,6 +518,7 @@ setTimeout(function() {
     }
 
     function restoreFormDraft() {
+      if (!DRAFT_RESTORE_ENABLED) return;
         try {
             const raw = localStorage.getItem(DRAFT_KEY);
             if (!raw) return;
