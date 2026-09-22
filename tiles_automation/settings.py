@@ -204,3 +204,12 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 
+# ── Morning dispatch list ─────────────────────────────────────────────────
+# WhatsApp number (with or without country code / punctuation — digits are
+# extracted at send time) that the /dispatch/ page's "Send via WhatsApp"
+# button pre-fills as the recipient, e.g. whoever packs orders at the
+# Godown. Set via the environment so it can be changed without a deploy and
+# isn't stored in the database or the repo. If unset, the page falls back to
+# a manual number entry.
+DISPATCH_WHATSAPP_NUMBER = os.environ.get('DISPATCH_WHATSAPP_NUMBER', '')
+

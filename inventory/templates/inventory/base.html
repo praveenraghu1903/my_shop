@@ -21,6 +21,7 @@
                 {% if user.is_authenticated and user.is_staff %}
                     <a href="{% url 'product_import' %}" class="btn btn-outline-light btn-sm">Import Products</a>
                     <a href="{% url 'daily_report_download' %}" class="btn btn-outline-light btn-sm">Download Today Report</a>
+                    <a href="{% url 'dispatch_list' %}" class="btn btn-outline-light btn-sm">Dispatch List</a>
                 {% endif %}
                 {% if user.is_authenticated %}
                     <span class="navbar-text me-3 text-white">
