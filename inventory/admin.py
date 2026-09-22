@@ -261,7 +261,7 @@ class DueAmountFilter(admin.SimpleListFilter):
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
     form = InvoiceAdminForm
-    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display', 'whatsapp_send')
+    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display', 'whatsapp_send', 'dispatch_status')
     list_filter = ('store', 'date', DueAmountFilter)
     search_fields = ('customer_name', 'customer_mobile', 'contacts__mobile')
     inlines = [InvoiceItemInline, InvoiceContactInline]
@@ -415,6 +415,18 @@ class InvoiceAdmin(admin.ModelAdmin):
             link,
         )
     whatsapp_send.short_description = 'WhatsApp'
+
+    def dispatch_status(self, obj):
+        """Read-only view of the Dispatch List status set on /dispatch/ — this
+        column doesn't add a way to change it here, just to see it."""
+        if obj.dispatched_at:
+            return format_html(
+                '<span style="color:#198754;">✓ {}</span>',
+                obj.dispatched_at.strftime('%d %b, %I:%M %p'),
+            )
+        return format_html('<span style="color:#999;">{}</span>', 'Pending')
+    dispatch_status.short_description = 'Dispatch'
+    dispatch_status.admin_order_field = 'dispatched_at'
 
     def customer_phones(self, obj):
         others = ', '.join(c.mobile for c in obj.contacts.all())

@@ -756,33 +756,41 @@ def cost_price_import_page(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MORNING DISPATCH LIST — everything sold at a remote display store (e.g.
-# Silwani, ~30km from the Godown) on a given day, aggregated by product, so
-# whoever is packing at the Godown knows exactly what to ship over. Read-only:
-# does not touch stock or invoices. The WhatsApp send is still a one-tap
-# manual send (same wa.me pattern used everywhere else in this app), not an
-# automatic push — see the destination-number fallback below.
+# MORNING DISPATCH LIST — every invoice sold at a remote display store (e.g.
+# Silwani, ~30km from the Godown) that hasn't been shipped yet, shown one
+# invoice at a time (not summed together) so a lower-priority invoice can be
+# left for later without losing track of it. Defaults to every PENDING
+# invoice for the store (dispatched_at is empty) regardless of date, so
+# nothing skipped one morning silently drops off the next. Read-only against
+# stock; the only write is stamping dispatched_at on whichever invoices are
+# actually sent. The WhatsApp send is still a one-tap manual send (same
+# wa.me pattern used everywhere else in this app), not an automatic push.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_dispatch_message(store, target_date, items, invoice_count):
+def _fmt_dispatch_qty(qty):
+    q = float(qty)
+    return f"{q:.0f}" if q == int(q) else f"{q:g}"
+
+
+def _build_dispatch_message(store, invoices):
     lines = [
         "📦 *AMBIKA — Dispatch List*",
         f"🚚 To: {store.name}",
-        f"📅 For sales on: {target_date.strftime('%d %b %Y')}",
         "",
-        "*Items to send:*",
     ]
-    if items:
-        for item in items:
-            size = item['product__size']
-            size_part = f" ({size})" if size else ''
-            lines.append(
-                f"- {item['product__name']}{size_part} × {item['total_qty']:.0f} {item['product__unit']}"
-            )
+    if invoices:
+        for inv in invoices:
+            when = timezone.localtime(inv.date).strftime('%d %b')
+            lines.append(f"🧾 *Invoice #{inv.id}* — {inv.customer_name} ({when})")
+            for item in inv.items.all():
+                size_part = f" ({item.product.size})" if item.product.size else ''
+                lines.append(
+                    f"  • {item.product.name}{size_part} × {_fmt_dispatch_qty(item.quantity)} {item.product.unit}"
+                )
+            lines.append("")
     else:
-        lines.append("(No sales recorded for this store/date.)")
-    lines.append("")
-    lines.append(f"🧾 From {invoice_count} invoice(s)")
+        lines.append("(No invoices selected.)")
+    lines.append(f"🧾 {len(invoices)} invoice(s) in this dispatch")
     lines.append("")
     lines.append("Please prepare and ship today. 🙏")
     return "\n".join(lines)
@@ -791,64 +799,91 @@ def _build_dispatch_message(store, target_date, items, invoice_count):
 @staff_member_required
 def dispatch_list(request):
     """
-    Morning dispatch list for a remote display store. Defaults to
-    yesterday's sales for Silwani, but both the store and date can be
-    changed via ?store=<id>&date=YYYY-MM-DD (e.g. to catch up on a day
-    that was missed).
+    Morning dispatch list for a remote display store, shown invoice by
+    invoice (not summed) so individual invoices can be prioritised and
+    sent separately.
+
+    Defaults to every PENDING invoice (dispatched_at is empty) for the
+    selected store, regardless of date. Optionally narrow to one sales
+    date via ?date=YYYY-MM-DD, and/or reveal already-dispatched invoices
+    too with ?include_dispatched=1 (e.g. to resend one).
+
+    POSTing action=send with a list of invoice_ids[] builds the WhatsApp
+    message for just those invoices, stamps them dispatched, and redirects
+    to WhatsApp with the message pre-filled.
     """
     display_stores = Store.objects.filter(store_type='DISPLAY').order_by('name')
 
-    store_id = request.GET.get('store')
+    store_id = request.POST.get('store') or request.GET.get('store')
     store = None
     if store_id and str(store_id).isdigit():
         store = display_stores.filter(id=store_id).first()
     if not store:
         store = display_stores.filter(name__iexact='Silwani').first() or display_stores.first()
 
-    date_str = request.GET.get('date')
+    date_str = request.POST.get('date') or request.GET.get('date')
     target_date = None
     if date_str:
         try:
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             target_date = None
-    if not target_date:
-        target_date = timezone.localdate() - timedelta(days=1)
 
-    items = []
-    invoice_count = 0
-    dispatch_message = ''
-    if store:
-        base_qs = InvoiceItem.objects.filter(invoice__store=store, invoice__date__date=target_date)
-        invoice_count = base_qs.values('invoice_id').distinct().count()
-        items = list(
-            base_qs.values('product_id', 'product__name', 'product__size', 'product__unit')
-            .annotate(total_qty=Sum('quantity'))
-            .order_by('product__name')
-        )
-        dispatch_message = _build_dispatch_message(store, target_date, items, invoice_count)
+    include_dispatched = (request.POST.get('include_dispatched') or request.GET.get('include_dispatched')) == '1'
 
-    # Destination number is set via the DISPATCH_WHATSAPP_NUMBER env var (not
-    # hardcoded / not stored in the DB), so it can be changed without a
-    # deploy. If it isn't set, the page falls back to a manual number field —
-    # same pattern already used for invoices with no saved mobile number.
     dispatch_number = getattr(settings, 'DISPATCH_WHATSAPP_NUMBER', '') or ''
-    wa_link = None
-    if store and items and dispatch_number:
-        digits = ''.join(ch for ch in dispatch_number if ch.isdigit())
-        if digits and not digits.startswith('91'):
-            digits = '91' + digits
-        if digits:
-            wa_link = f"https://wa.me/{digits}?text={quote(dispatch_message)}"
+
+    if request.method == 'POST' and request.POST.get('action') == 'send':
+        selected_ids = request.POST.getlist('invoice_ids[]')
+        if not store:
+            messages.error(request, "No display store exists yet. Ask an admin to add one.")
+        elif not selected_ids:
+            messages.error(request, "Select at least one invoice to send.")
+        else:
+            selected_invoices = list(
+                Invoice.objects.filter(id__in=selected_ids, store=store)
+                .prefetch_related('items__product')
+                .order_by('date')
+            )
+            manual_number = (request.POST.get('manual_number') or '').strip()
+            number_to_use = dispatch_number or manual_number
+            digits = ''.join(ch for ch in number_to_use if ch.isdigit())
+            if digits and not digits.startswith('91'):
+                digits = '91' + digits
+
+            if not digits:
+                messages.error(request, "Enter a WhatsApp number to send to (or set DISPATCH_WHATSAPP_NUMBER).")
+            else:
+                dispatch_message = _build_dispatch_message(store, selected_invoices)
+                Invoice.objects.filter(id__in=[inv.id for inv in selected_invoices]).update(
+                    dispatched_at=timezone.now()
+                )
+                wa_link = f"https://wa.me/{digits}?text={quote(dispatch_message)}"
+                return redirect(wa_link)
+
+    invoices_qs = Invoice.objects.none()
+    if store:
+        invoices_qs = Invoice.objects.filter(store=store).prefetch_related('items__product')
+        if target_date:
+            invoices_qs = invoices_qs.filter(date__date=target_date)
+        elif include_dispatched:
+            # No date filter + showing dispatched history too could mean
+            # scrolling back through the store's entire lifetime — cap it to
+            # a recent window; the date filter above is how to look further back.
+            invoices_qs = invoices_qs.filter(date__gte=timezone.now() - timedelta(days=14))
+        if not include_dispatched:
+            invoices_qs = invoices_qs.filter(dispatched_at__isnull=True)
+        invoices_qs = invoices_qs.order_by('date')
+
+    invoices = list(invoices_qs)
 
     context = {
         'stores': display_stores,
         'selected_store': store,
         'target_date': target_date,
-        'items': items,
-        'invoice_count': invoice_count,
-        'wa_link': wa_link,
+        'include_dispatched': include_dispatched,
+        'invoices': invoices,
+        'invoice_count': len(invoices),
         'dispatch_number_configured': bool(dispatch_number),
-        'dispatch_message': dispatch_message,
     }
     return render(request, 'inventory/dispatch_list.html', context)
