@@ -79,6 +79,11 @@ class Invoice(models.Model):
     labour_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    dispatched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When this invoice's items were sent to the display store via the "
+                   "morning Dispatch List. Blank means it's still pending dispatch."
+    )
 
     @property
     def balance_due(self):
