@@ -29,12 +29,12 @@
             <div class="col-md-3">
                 <button type="submit" class="btn btn-outline-secondary w-100">Refresh</button>
                 {% if target_date %}
-                <a href="?store={{ selected_store.id }}" class="btn btn-link btn-sm p-0 mt-1 d-block">Clear date (show all pending)</a>
+                <a href="?store={{ selected_store.id }}" class="btn btn-link btn-sm p-0 mt-1 d-block">Clear date (last 2 days)</a>
                 {% endif %}
             </div>
         </form>
         <small class="text-muted d-block mt-2">
-            By default this shows every invoice for the store that hasn't been marked dispatched yet, on any date — nothing you leave for later gets lost. Pick a date to look at (or resend) one specific day.
+            By default this shows pending (not yet dispatched) invoices for the store from today and yesterday. Pick a date to look further back at (or resend) one specific day.
         </small>
     </div>
 </div>
@@ -51,7 +51,7 @@
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
                 {{ selected_store.name }}
-                {% if target_date %} — {{ target_date|date:"d M Y" }}{% else %} — all pending{% endif %}
+                {% if target_date %} — {{ target_date|date:"d M Y" }}{% else %} — last 2 days, pending{% endif %}
             </h5>
             <span class="badge bg-light text-dark">{{ invoice_count }} invoice{{ invoice_count|pluralize }}</span>
         </div>
@@ -109,7 +109,7 @@
             {% if target_date %}
                 No invoices for {{ selected_store.name }} on {{ target_date|date:"d M Y" }}{% if not include_dispatched %} that are still pending{% endif %}.
             {% else %}
-                Nothing pending for {{ selected_store.name }} right now — everything's been dispatched. 🎉
+                Nothing pending for {{ selected_store.name }} in the last 2 days — everything's been dispatched. 🎉 Pick an earlier date above to check further back.
             {% endif %}
         </div>
     </div>

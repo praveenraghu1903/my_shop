@@ -803,10 +803,13 @@ def dispatch_list(request):
     invoice (not summed) so individual invoices can be prioritised and
     sent separately.
 
-    Defaults to every PENDING invoice (dispatched_at is empty) for the
-    selected store, regardless of date. Optionally narrow to one sales
-    date via ?date=YYYY-MM-DD, and/or reveal already-dispatched invoices
-    too with ?include_dispatched=1 (e.g. to resend one).
+    Defaults to PENDING invoices (dispatched_at is empty) from the last
+    two sales days (today and yesterday) for the selected store — that's
+    the normal morning window, so it stays short and doesn't turn into a
+    scroll through everything ever sold. Optionally narrow to one sales
+    date via ?date=YYYY-MM-DD (goes further back than two days too), and/or
+    reveal already-dispatched invoices too with ?include_dispatched=1
+    (e.g. to resend one).
 
     POSTing action=send with a list of invoice_ids[] builds the WhatsApp
     message for just those invoices, stamps them dispatched, and redirects
@@ -865,12 +868,14 @@ def dispatch_list(request):
     if store:
         invoices_qs = Invoice.objects.filter(store=store).prefetch_related('items__product')
         if target_date:
+            # An explicit date is a deliberate look-back (or resend) — show
+            # just that one day, however far back it is.
             invoices_qs = invoices_qs.filter(date__date=target_date)
-        elif include_dispatched:
-            # No date filter + showing dispatched history too could mean
-            # scrolling back through the store's entire lifetime — cap it to
-            # a recent window; the date filter above is how to look further back.
-            invoices_qs = invoices_qs.filter(date__gte=timezone.now() - timedelta(days=14))
+        else:
+            # Default window: today and yesterday only, not "everything
+            # pending ever" — that's the normal morning dispatch window.
+            window_start = timezone.localdate() - timedelta(days=1)
+            invoices_qs = invoices_qs.filter(date__date__gte=window_start)
         if not include_dispatched:
             invoices_qs = invoices_qs.filter(dispatched_at__isnull=True)
         invoices_qs = invoices_qs.order_by('date')
