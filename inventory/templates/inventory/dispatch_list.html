@@ -1,0 +1,100 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<h2 class="mb-4">Morning Dispatch List</h2>
+
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="store" class="form-label">Store</label>
+                <select class="form-select" id="store" name="store" onchange="this.form.submit()">
+                    {% for store in stores %}
+                    <option value="{{ store.id }}" {% if selected_store and store.id == selected_store.id %}selected{% endif %}>{{ store.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="date" class="form-label">Sales date</label>
+                <input type="date" class="form-control" id="date" name="date" value="{{ target_date|date:'Y-m-d' }}" onchange="this.form.submit()">
+                <small class="text-muted">Defaults to yesterday — change this to catch up on a missed day</small>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-outline-secondary w-100">Refresh</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_store %}
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Ship to {{ selected_store.name }} — for sales on {{ target_date|date:"d M Y" }}</h5>
+        <span class="badge bg-light text-dark">{{ invoice_count }} invoice{{ invoice_count|pluralize }}</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Size</th>
+                    <th class="text-end">Quantity to ship</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.product__name }}</td>
+                    <td>{{ item.product__size|default:"—" }}</td>
+                    <td class="text-end fw-bold">{{ item.total_qty|floatformat:0 }} {{ item.product__unit }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted py-3">No sales recorded for {{ selected_store.name }} on this date.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if items %}
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <h6 class="mb-3">Send to whoever's packing at the Godown</h6>
+
+        {% if wa_link %}
+        <a href="{{ wa_link }}" target="_blank" class="btn btn-success" style="background:#25D366; border-color:#25D366;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+            </svg>
+            Send Dispatch List on WhatsApp
+        </a>
+        <div class="mt-2"><small class="text-muted">Opens WhatsApp with the list already typed in — just hit send.</small></div>
+        {% else %}
+        <p class="text-muted small">No dispatch number is configured yet (set the <code>DISPATCH_WHATSAPP_NUMBER</code> environment variable to skip this every morning). Enter a number once below:</p>
+        <div class="input-group" style="max-width:340px;">
+            <span class="input-group-text">+91</span>
+            <input type="tel" id="manual-dispatch-mobile" class="form-control" placeholder="Enter mobile number" maxlength="10">
+            <button class="btn btn-success" onclick="openDispatchWhatsAppManual()">Send</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="alert alert-warning">No display store exists yet. Add one in the admin first.</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dispatchMsg = "{{ dispatch_message|escapejs }}";
+function openDispatchWhatsAppManual() {
+    const num = document.getElementById('manual-dispatch-mobile').value.trim().replace(/\D/g, '');
+    if (num.length < 10) { alert('Please enter a valid 10-digit number'); return; }
+    window.open(`https://wa.me/91${num}?text=${encodeURIComponent(dispatchMsg)}`, '_blank');
+}
+</script>
+{% endblock %}

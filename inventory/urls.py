@@ -12,5 +12,6 @@ urlpatterns = [
     path('cost-prices/export/', views.export_cost_price_template, name='export_cost_price_template'),
     path('cost-prices/import/', views.import_cost_prices, name='import_cost_prices'),
     path('cost-prices/page/', views.cost_price_import_page, name='cost_price_import_page'),
+    path('dispatch/', views.dispatch_list, name='dispatch_list'),
 ]
 
