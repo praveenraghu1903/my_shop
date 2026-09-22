@@ -139,6 +139,17 @@ setTimeout(function() {
             {% csrf_token %}
             <div class="row">
                 <div class="col-md-6 mb-3">
+                    <label for="store" class="form-label">Store</label>
+                    <select class="form-select" id="store" name="store" required>
+                        {% for store in stores %}
+                        <option value="{{ store.id }}" {% if selected_store and store.id == selected_store.id %}selected{% endif %}>{{ store.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Which shop is this sale for</small>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
                     <label for="customer_name" class="form-label">Customer Name</label>
                     <input type="text" class="form-control" id="customer_name" name="customer_name" list="known-customer-names" autocomplete="off" required>
                     <datalist id="known-customer-names">

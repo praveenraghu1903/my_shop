@@ -1,3 +1,6 @@
+import re
+from urllib.parse import quote
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
@@ -7,6 +10,84 @@ from django import forms
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
+from django.utils.html import format_html
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WHATSAPP RESEND — builds the same bill text/link sent from the staff sales
+# page (inventory/templates/inventory/sales_new.html), so it can be re-sent
+# from the admin invoice list if it was missed (or the number was wrong) the
+# first time. This is a read-only helper — it does not touch the save/invoice
+# flow at all.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _fmt_qty(qty):
+    """Mirrors Django's {{ value|floatformat:0 }} used in sales_new.html."""
+    return f"{(qty or Decimal('0')):.0f}"
+
+
+def _fmt_money(amount):
+    """Mirrors Django's {{ value|floatformat:2 }} used in sales_new.html."""
+    return f"{(amount or Decimal('0')):.2f}"
+
+
+def _build_whatsapp_invoice_message(invoice):
+    lines = [
+        f"🧾 *AMBIKA — Invoice #{invoice.id}*",
+        "",
+        f"📅 Date: {invoice.date.strftime('%d %b %Y')}",
+        f"👤 Customer: {invoice.customer_name}",
+        "",
+        "*Items:*",
+    ]
+    for item in invoice.items.all():
+        lines.append(
+            f"- {item.product.name} ({item.product.size}) × {_fmt_qty(item.quantity)} "
+            f"{item.product.unit} @ ₹{_fmt_money(item.rate)} = ₹{_fmt_money(item.item_total)}"
+        )
+    lines.append("")
+    if invoice.transport_cost and invoice.transport_cost > 0:
+        lines.append(f"🚚 Transport Charges: ₹{_fmt_money(invoice.transport_cost)}")
+    if invoice.labour_cost and invoice.labour_cost > 0:
+        lines.append(f"🛠️ Labour Charges: ₹{_fmt_money(invoice.labour_cost)}")
+    if invoice.discount_amount and invoice.discount_amount > 0:
+        lines.append(f"➖ Discount: ₹{_fmt_money(invoice.discount_amount)}")
+    if invoice.transporter_name:
+        lines.append(f"🚛 Transporter: {invoice.transporter_name}")
+    lines.append("")
+    lines.append(f"💰 Total: ₹{_fmt_money(invoice.total_amount)}")
+    lines.append(f"✅ Paid: ₹{_fmt_money(invoice.paid_amount)}")
+    if invoice.balance_due > 0:
+        lines.append(f"⚠️ Due: ₹{_fmt_money(invoice.balance_due)}")
+    else:
+        lines.append("✔️ Fully Paid")
+    lines.append("")
+    lines.append("Thank you for your business! 🙏")
+    lines.append(f"— AMBIKA, {invoice.store.name}")
+    return "\n".join(lines)
+
+
+def _whatsapp_number_for(invoice):
+    """Same number the sales page would have sent to: the invoice's primary
+    mobile, falling back to the first saved extra contact number."""
+    mobile = (invoice.customer_mobile or '').strip()
+    if not mobile:
+        contact = next(iter(invoice.contacts.all()), None)
+        mobile = (contact.mobile if contact else '') or ''
+    digits = re.sub(r'\D', '', mobile)
+    if not digits:
+        return None
+    if not digits.startswith('91'):
+        digits = '91' + digits
+    return digits
+
+
+def _whatsapp_link_for(invoice):
+    number = _whatsapp_number_for(invoice)
+    if not number:
+        return None
+    message = _build_whatsapp_invoice_message(invoice)
+    return f"https://wa.me/{number}?text={quote(message)}"
 
 class ProductAdminForm(forms.ModelForm):
     """Custom form for Product admin that includes initial quantity, store and location setup"""
@@ -180,7 +261,7 @@ class DueAmountFilter(admin.SimpleListFilter):
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
     form = InvoiceAdminForm
-    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display')
+    list_display = ('id', 'customer_name', 'customer_phones', 'store', 'date', 'total_amount', 'paid_amount', 'balance_due_display', 'whatsapp_send')
     list_filter = ('store', 'date', DueAmountFilter)
     search_fields = ('customer_name', 'customer_mobile', 'contacts__mobile')
     inlines = [InvoiceItemInline, InvoiceContactInline]
@@ -309,12 +390,31 @@ class InvoiceAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
+        qs = qs.select_related('store').prefetch_related('items__product', 'contacts')
         return qs.annotate(
             balance_due_annot=ExpressionWrapper(
                 F('total_amount') - F('paid_amount'),
                 output_field=DecimalField(max_digits=12, decimal_places=2),
             )
         )
+
+    def whatsapp_send(self, obj):
+        """
+        Re-send the same bill message the staff sales page sends after a sale
+        is saved. Covers the case where sending was missed (or skipped) at
+        save time — this is the only extra chance to send it, so it must work
+        off the invoice as stored, without requiring the item to still be on
+        the sales page.
+        """
+        link = _whatsapp_link_for(obj)
+        if not link:
+            return format_html('<span style="color:#999;">{}</span>', 'No number')
+        return format_html(
+            '<a class="button" href="{}" target="_blank" rel="noopener" '
+            'style="background:#25D366;border-color:#25D366;color:#fff;">Send bill ↗</a>',
+            link,
+        )
+    whatsapp_send.short_description = 'WhatsApp'
 
     def customer_phones(self, obj):
         others = ', '.join(c.mobile for c in obj.contacts.all())

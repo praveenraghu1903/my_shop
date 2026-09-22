@@ -45,15 +45,35 @@ def sales_new(request):
     
     # Get today's summary
     today = timezone.now().date()
-    # Filter invoices by the user's store if possible
+
+    # Which store this sale/page is scoped to. Staff used to be locked to
+    # whichever store their login was assigned to (via UserProfile.store) —
+    # now everyone uses this one page and picks the store per sale from a
+    # dropdown. The profile's store (if set) is only used as the dropdown's
+    # default, so existing staff logins keep behaving the same unless they
+    # actively pick a different store.
     try:
-        user_store = request.user.userprofile.store
+        profile_store = request.user.userprofile.store
     except UserProfile.DoesNotExist:
-        user_store = None
+        profile_store = None
+
+    display_stores = Store.objects.filter(store_type='DISPLAY').order_by('name')
+
+    requested_store_id = request.POST.get('store') or request.GET.get('store')
+    selected_store = None
+    if requested_store_id and str(requested_store_id).isdigit():
+        selected_store = display_stores.filter(id=requested_store_id).first()
+    if not selected_store:
+        if profile_store and profile_store.store_type == 'DISPLAY':
+            selected_store = profile_store
+        else:
+            selected_store = display_stores.first()
+
+    user_store = selected_store
 
     if request.method == 'POST':
         if not user_store:
-            messages.error(request, "You are not assigned to any store.")
+            messages.error(request, "No display store exists yet. Ask an admin to add one.")
             return redirect('sales_new')
 
         customer_name = request.POST.get('customer_name')
@@ -140,7 +160,7 @@ def sales_new(request):
                     )
 
                 messages.success(request, f"Sale recorded successfully! Invoice #{invoice.id}")
-                return redirect(f'/sales/new/?whatsapp_invoice={invoice.id}')
+                return redirect(f'/sales/new/?whatsapp_invoice={invoice.id}&store={user_store.id}')
 
         except Exception as e:
             messages.error(request, str(e))
@@ -171,6 +191,8 @@ def sales_new(request):
         'products': products,
         'locations': locations,
         'user_store': user_store,
+        'stores': display_stores,
+        'selected_store': selected_store,
         'today_sales': today_sales,
         'today_received': today_received,
         'today_due': today_due,
