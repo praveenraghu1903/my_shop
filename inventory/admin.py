@@ -64,6 +64,11 @@ def _build_whatsapp_invoice_message(invoice):
     lines.append("")
     lines.append("Thank you for your business! 🙏")
     lines.append(f"— AMBIKA, {invoice.store.name}")
+    lines.append("")
+    lines.append("📞 For any query, call: 9993457497")
+    lines.append("")
+    lines.append("⭐ Liked our service? Please rate us on Google:")
+    lines.append("https://g.page/r/Ce6KKrQEbv-eEBE/review")
     return "\n".join(lines)
 
 
