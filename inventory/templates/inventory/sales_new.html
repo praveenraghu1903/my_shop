@@ -72,7 +72,12 @@ const invoiceMsg = `🧾 *AMBIKA — Invoice #{{ last_invoice.id }}*
 {% if last_invoice.balance_due > 0 %}⚠️ Due: ₹{{ last_invoice.balance_due|floatformat:2 }}{% else %}✔️ Fully Paid{% endif %}
 
 Thank you for your business! 🙏
-— AMBIKA, {{ last_invoice.store.name }}`;
+— AMBIKA, {{ last_invoice.store.name }}
+
+📞 For any query, call: 9993457497
+
+⭐ Liked our service? Please rate us on Google:
+https://g.page/r/Ce6KKrQEbv-eEBE/review`;
 
 const encodedMsg = encodeURIComponent(invoiceMsg);
 
@@ -447,7 +452,7 @@ setTimeout(function() {
             }
         });
 
-        // ── Customer name autofill ───────────────────────────────────────
+        // ── Customer name autofill ──────────────────────────────────────────────────────
         const customerInput = document.getElementById('customer_name');
         const suggestionsBox = document.getElementById('customer-suggestions');
         const mobileInput = document.getElementById('customer_mobile');
@@ -497,7 +502,7 @@ setTimeout(function() {
 
     }); // end document.ready
 
-    // ── Form draft auto-save to localStorage ─────────────────────────────
+    // ── Form draft auto-save to localStorage ─────────────────────────────────────────
     // Saves every 5 seconds and on every input. Restores on page load.
     // Clears on successful form submit.
     const DRAFT_KEY = 'sales_form_draft';
@@ -626,7 +631,7 @@ setTimeout(function() {
         setTimeout(restoreFormDraft, 400);
     });
 
-    // ── Keepalive ping every 10 minutes ──────────────────────────────────
+    // ── Keepalive ping every 10 minutes ─────────────────────────────────────────────────
     // Keeps Render service warm and session alive while form is being filled
     setInterval(function() {
         fetch('/sales/new/', { method: 'HEAD', credentials: 'same-origin' }).catch(() => {});
